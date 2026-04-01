@@ -49,6 +49,9 @@ namespace pipgui
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr)
             return;
@@ -105,6 +108,9 @@ namespace pipgui
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr)
             return;
@@ -159,6 +165,9 @@ namespace pipgui
 
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
+
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
 
         auto spr = getDrawTarget();
         if (!spr)
@@ -233,6 +242,9 @@ namespace pipgui
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr)
             return;
@@ -288,6 +300,11 @@ namespace pipgui
 
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
+
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+        cx = (int16_t)(cx - _render.originX);
+        cy = (int16_t)(cy - _render.originY);
 
         auto spr = getDrawTarget();
         if (!spr)

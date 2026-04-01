@@ -71,6 +71,34 @@ namespace pipgui
             _screen.current = id;
         else
             _screen.current = INVALID_SCREEN_ID;
+
+        // Prevent "immediate click" on newly opened list/tile screens when a button is still held
+        // from the previous screen interaction (e.g. Select held while opening a menu).
+        if (_screen.current != INVALID_SCREEN_ID)
+        {
+            const InputState &in = _input;
+            if (ListState *list = getList(_screen.current))
+            {
+                list->nextHoldStartMs = 0;
+                list->prevHoldStartMs = 0;
+                list->nextLongFired = false;
+                list->prevLongFired = false;
+                list->lastNextDown = in.nextDown;
+                list->lastPrevDown = in.prevDown;
+                list->lastSelectDown = in.hasSelect ? in.selectDown : false;
+            }
+            if (TileState *tile = getTile(_screen.current))
+            {
+                tile->nextHoldStartMs = 0;
+                tile->prevHoldStartMs = 0;
+                tile->nextLongFired = false;
+                tile->prevLongFired = false;
+                tile->lastNextDown = in.nextDown;
+                tile->lastPrevDown = in.prevDown;
+                tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
+            }
+        }
+
         _flags.dirtyRedrawPending = 0;
         _flags.needRedraw = 1;
     }
@@ -129,6 +157,7 @@ namespace pipgui
 
         if (_screen.anim != ScreenAnimNone &&
             _flags.spriteEnabled &&
+            !_flags.tiledMode &&
             _disp.display &&
             !_flags.notifActive &&
             _screen.current < _screen.capacity &&
@@ -280,6 +309,26 @@ namespace pipgui
     }
 
     void GUI::prevScreen()
+    {
+        syncRegisteredScreens();
+        if (_flags.screenTransition)
+            return;
+        if (_screen.capacity == 0 || !_screen.callbacks)
+            return;
+        uint16_t cap = _screen.capacity;
+        uint16_t idx = (_screen.current < cap) ? _screen.current : 0;
+        for (uint16_t i = 0; i < cap; i++)
+        {
+            idx = (idx == 0) ? (cap - 1) : (idx - 1);
+            if (_screen.callbacks[idx])
+            {
+                activateScreenId(static_cast<uint8_t>(idx), -1);
+                return;
+            }
+        }
+    }
+
+    void GUI::backScreen()
     {
         if (_flags.screenTransition)
             return;

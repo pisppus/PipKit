@@ -348,6 +348,21 @@ namespace pipgui
         int16_t rw = (int16_t)((unionRight - rx) + pad * 2);
         int16_t rh = (int16_t)(drawLayout.h + pad * 2);
 
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - pad), (int16_t)(ry - pad), rw, rh, "tiled-update-scrolldots", [&]()
+                                      {
+                                          const uint16_t bg565 = detail::color888To565(_render.bgColor);
+                                          drawRect()
+                                              .pos((int16_t)(rx - pad), (int16_t)(ry - pad))
+                                              .size(rw, rh)
+                                              .fill(bg565)
+                                              .draw();
+                                          drawScrollDotsImpl(x, y, count, activeIndex, activeColor, inactiveColor, radius, spacing);
+                                      });
+            return;
+        }
+
         bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;
 
@@ -466,7 +481,13 @@ namespace pipgui
             }
             requestRedraw();
         }
-        ClipRectGuard clipGuard(getDrawTarget(), clipLeft, layout.top, (int16_t)(clipRight - clipLeft), layout.h);
+        const int16_t ox = _render.originX;
+        const int16_t oy = _render.originY;
+        ClipRectGuard clipGuard(getDrawTarget(),
+                                (int16_t)(clipLeft - ox),
+                                (int16_t)(layout.top - oy),
+                                (int16_t)(clipRight - clipLeft),
+                                layout.h);
 
         if (canAnimateCount && count == 0)
         {

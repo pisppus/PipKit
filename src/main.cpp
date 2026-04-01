@@ -23,6 +23,10 @@ namespace
 #define PIPGUI_DEMO_BTN_PREV_PIN 4
 #endif
 
+#ifndef PIPGUI_DEMO_BTN_SELECT_PIN
+#define PIPGUI_DEMO_BTN_SELECT_PIN 21
+#endif
+
 // Set to 255 to disable backlight pin control in the demo.
 // This is useful if your backlight pin conflicts with buttons.
 #ifndef PIPGUI_DEMO_BACKLIGHT_PIN
@@ -35,13 +39,16 @@ namespace
 
   constexpr uint8_t kBtnNextPin = (uint8_t)PIPGUI_DEMO_BTN_NEXT_PIN;
   constexpr uint8_t kBtnPrevPin = (uint8_t)PIPGUI_DEMO_BTN_PREV_PIN;
+  constexpr uint8_t kBtnSelectPin = (uint8_t)PIPGUI_DEMO_BTN_SELECT_PIN;
   constexpr uint8_t kBacklightPin = (uint8_t)PIPGUI_DEMO_BACKLIGHT_PIN;
   constexpr uint16_t kAdaptivePreviewMinW = 240;
   constexpr uint16_t kAdaptivePreviewMinH = 135;
   constexpr uint32_t kAdaptivePreviewCycleMs = 7200;
 
   static_assert(kBtnNextPin != kBtnPrevPin, "Buttons must be on different pins");
-  static_assert(kBacklightPin == 255 || (kBacklightPin != kBtnNextPin && kBacklightPin != kBtnPrevPin),
+  static_assert(kBtnNextPin != kBtnSelectPin, "Buttons must be on different pins");
+  static_assert(kBtnPrevPin != kBtnSelectPin, "Buttons must be on different pins");
+  static_assert(kBacklightPin == 255 || (kBacklightPin != kBtnNextPin && kBacklightPin != kBtnPrevPin && kBacklightPin != kBtnSelectPin),
                 "Backlight pin conflicts with a button pin");
 
   struct BlurRect
@@ -63,6 +70,7 @@ namespace
 
   Button btnNext(kBtnNextPin, Pullup);
   Button btnPrev(kBtnPrevPin, Pullup);
+  Button btnSelect(kBtnSelectPin, Pullup);
 
   bool g_toggleValue = false;
   uint32_t g_toggleLockedUntil = 0;
@@ -417,7 +425,7 @@ void setup()
       .pins({11, 12, 10, 9, 14})
       .size(240, 320);
 
-  ui.begin(3);
+  ui.begin(3, true); // force tiled rendering (2 horizontal tiles) for testing
 #if (PIPGUI_DEMO_ADAPTIVE_PREVIEW != 0)
   ui.setAdaptivePreview(kAdaptivePreviewMinW, kAdaptivePreviewMinH, kAdaptivePreviewCycleMs);
 #endif
@@ -426,7 +434,7 @@ void setup()
   ui.configStatusBar()
       .height(kStatusBarHeight)
       .pos(Top)
-      .style(Blur);
+      .style(Solid);
   #endif
   ui.setStatusBarText()
       .left("pipGUI")
@@ -438,6 +446,7 @@ void setup()
 
   btnNext.begin();
   btnPrev.begin();
+  btnSelect.begin();
   runBootAnimation(ui, FadeIn, "PISPPUS", "Fade in");
 
   ui.setScreen(listMenu);
@@ -447,17 +456,19 @@ void loop()
 {
   serviceSerialRotation();
 
-  const auto input = ui.pollInput(btnNext, btnPrev);
+  const auto input = ui.pollInput(btnNext, btnPrev, btnSelect);
   const uint32_t nowMs = millis();
   const bool nextPressed = input.nextPressed;
   const bool prevPressed = input.prevPressed;
   const bool nextDown = input.nextDown;
   const bool prevDown = input.prevDown;
+  const bool selectPressed = input.selectPressed;
+  const bool selectDown = input.selectDown;
   const bool comboDown = input.comboDown;
 
   if (ui.screenTransitionActive())
   {
-    ui.loop();
+    ui.loopWithPolledInput();
     return;
   }
 
@@ -465,99 +476,80 @@ void loop()
   updateBatteryStatus(nowMs);
 
   const uint8_t cur = ui.currentScreen();
-  const bool notificationActive = ui.notificationActive();
 
-  if (!notificationActive)
+  if (!ui.notificationActive())
   {
-    if (isListMenuScreen(cur))
+    switch (cur)
     {
-      ui.listInput()
-          .nextDown(nextDown)
-          .prevDown(prevDown);
-    }
-    else if (isTileMenuScreen(cur))
-    {
-      ui.tileInput()
-          .nextDown(nextDown)
-          .prevDown(prevDown);
-    }
-    else
-    {
-      switch (cur)
+    case glow:
+      updateGlowDemoFrame(nowMs);
+      break;
+    case blur:
+      updateBlurDemoFrame(nowMs);
+      break;
+    case graph:
+    case graphSmall:
+    case graphTall:
+    case graphOsc:
+      updateGraphScreen(cur, nowMs);
+      if (ui.GraphPauseToggled())
       {
-      case glow:
-        updateGlowDemoFrame(nowMs);
-        if (nextPressed)
-          ui.nextScreen();
-        break;
-      case blur:
-        updateBlurDemoFrame(nowMs);
-        if (nextPressed)
-          ui.nextScreen();
-        break;
-      case graph:
-      case graphSmall:
-      case graphTall:
-      case graphOsc:
-        updateGraphScreen(cur, nowMs);
-        if (nextPressed)
-          ui.nextScreen();
-        break;
-      case progress:
-        updateProgressDemoFrame(nowMs);
-        if (nextPressed)
-          ui.nextScreen();
-        break;
-      case popupMenuDemo:
-        updatePopupMenuDemo(nextPressed, nextDown, prevPressed, prevDown);
-        break;
-      case settings:
-        if (prevPressed)
-          ui.prevScreen();
+        // Example hook for firmware-side UX (text/icon). Library does not draw the indicator.
+        if (ui.graphPaused())
+          Serial.println("graph paused");
         else
-          updateSettingsDemoFrame(nowMs, nextPressed, nextDown);
-        break;
-      case firmwareUpdate:
-        updateFirmwareUpdateScreen(nowMs, nextPressed, nextDown, prevPressed, prevDown);
-        break;
-      case toggleSwitch:
-        updateToggleDemo(nextPressed, prevPressed);
-        break;
-      case buttonsDemo:
-        updateButtonsDemo(nowMs, nextPressed, nextDown, prevPressed, prevDown, comboDown);
-        break;
-      case sliderDemo:
-        updateSliderDemo(nowMs, comboDown);
-        break;
-      case animatedIconsDemo:
-        updateAnimatedIconsDemo(nowMs, comboDown);
-        break;
-      case scrollDots:
-        updateScrollDotsDemo(nowMs, nextPressed, prevPressed);
-        break;
-      case drumRoll:
-        updateDrumRollDemo(nowMs, nextPressed, prevPressed);
-        break;
-      case errorOverlay:
-      case warningOverlay:
-        handleErrorDemo(cur, nextPressed, prevPressed);
-        break;
-      default:
-        if (nextPressed)
-          ui.nextScreen();
-        break;
+          Serial.println("graph resumed");
       }
+      break;
+    case progress:
+      updateProgressDemoFrame(nowMs);
+      break;
+    case popupMenuDemo:
+      ui.consumeAutoNav();
+      updatePopupMenuDemo(nextPressed, nextDown, prevPressed, prevDown, selectDown);
+      break;
+    case settings:
+      ui.consumeAutoNav();
+      if (prevPressed)
+        ui.backScreen();
+      else
+        updateSettingsDemoFrame(nowMs, nextPressed, nextDown);
+      break;
+    case firmwareUpdate:
+      ui.consumeAutoNav();
+      updateFirmwareUpdateScreen(nowMs, nextPressed, nextDown, prevPressed, prevDown, selectDown);
+      break;
+    case toggleSwitch:
+      ui.consumeAutoNav();
+      updateToggleDemo(nextPressed, prevPressed);
+      break;
+    case buttonsDemo:
+      ui.consumeAutoNav();
+      updateButtonsDemo(nowMs, nextPressed, nextDown, prevPressed, prevDown, comboDown);
+      break;
+    case sliderDemo:
+      updateSliderDemo(nowMs, comboDown);
+      break;
+    case animatedIconsDemo:
+      updateAnimatedIconsDemo(nowMs, comboDown);
+      break;
+    case scrollDots:
+      ui.consumeAutoNav();
+      updateScrollDotsDemo(nowMs, nextPressed, prevPressed);
+      break;
+    case drumRoll:
+      ui.consumeAutoNav();
+      updateDrumRollDemo(nowMs, nextPressed, prevPressed);
+      break;
+    case errorOverlay:
+    case warningOverlay:
+      ui.consumeAutoNav();
+      handleErrorDemo(cur, nextPressed, prevPressed);
+      break;
+    default:
+      break;
     }
   }
 
-  if (ui.errorActive())
-  {
-    ui.setErrorButtonsDown(nextDown, prevDown, comboDown);
-  }
-  else if (ui.notificationActive())
-  {
-    ui.setNotificationButtonDown(prevDown);
-  }
-
-  ui.loop();
+  ui.loopWithPolledInput();
 }

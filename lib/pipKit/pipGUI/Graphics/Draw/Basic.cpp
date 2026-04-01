@@ -432,6 +432,11 @@ namespace pipgui
         if (!_flags.spriteEnabled)
             return;
 
+        x0 = (int16_t)(x0 - _render.originX);
+        y0 = (int16_t)(y0 - _render.originY);
+        x1 = (int16_t)(x1 - _render.originX);
+        y1 = (int16_t)(y1 - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr)
             return;
@@ -581,6 +586,9 @@ namespace pipgui
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr || !spr->getBuffer())
             return;
@@ -627,6 +635,8 @@ namespace pipgui
         auto spr = getDrawTarget();
         if (!_flags.spriteEnabled || r <= 0 || !spr)
             return;
+        cx = (int16_t)(cx - _render.originX);
+        cy = (int16_t)(cy - _render.originY);
         Surface565 s;
         if (!getSurface565(spr, s))
             return;
@@ -698,14 +708,17 @@ namespace pipgui
         Surface565 s;
         if (spr && getSurface565(spr, s) && r <= 5)
         {
+            // Sprite-space coordinates (tiled-mode uses origin offsets).
+            const int16_t cxS = (int16_t)(cx - _render.originX);
+            const int16_t cyS = (int16_t)(cy - _render.originY);
             uint8_t maskSize = 0;
             const uint8_t *mask = tinyCircleMask<false>((uint8_t)r, maskSize);
             if (mask)
             {
                 const Color565 c = makeColor565(color);
                 const uint8_t *gamma = gammaTable();
-                const int16_t x0 = (int16_t)(cx - r);
-                const int16_t y0 = (int16_t)(cy - r);
+                const int16_t x0 = (int16_t)(cxS - r);
+                const int16_t y0 = (int16_t)(cyS - r);
                 for (uint8_t py = 0; py < maskSize; ++py)
                 {
                     const int16_t y = (int16_t)(y0 + py);
@@ -734,6 +747,7 @@ namespace pipgui
         }
         const uint8_t rr = (r > 255) ? (uint8_t)255 : (uint8_t)r;
         const int16_t d = (int16_t)(rr * 2 + 1);
+        // Keep screen-space coordinates here: drawRoundRect() applies origin offsets internally.
         drawRoundRect((int16_t)(cx - rr), (int16_t)(cy - rr), d, d, rr, color);
     }
 
@@ -744,6 +758,9 @@ namespace pipgui
         if (!_flags.spriteEnabled || w <= 0 || h <= 0)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         const int16_t maxR = (w < h ? w : h) / 2;
         const uint8_t rTL = (radiusTL > maxR) ? (uint8_t)maxR : radiusTL;
         const uint8_t rTR = (radiusTR > maxR) ? (uint8_t)maxR : radiusTR;
@@ -752,7 +769,7 @@ namespace pipgui
 
         if (rTL == 0 && rTR == 0 && rBR == 0 && rBL == 0)
         {
-            fillRect(x, y, w, h, color565);
+            fillRect((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w, h, color565);
             return;
         }
 
@@ -886,9 +903,12 @@ namespace pipgui
     {
         if (!_flags.spriteEnabled || w <= 0 || h <= 0)
             return;
+
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
         if (w <= 2 || h <= 2)
         {
-            fillRect(x, y, w, h, color565);
+            fillRect((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w, h, color565);
             return;
         }
 
@@ -1057,6 +1077,9 @@ namespace pipgui
     {
         if (r <= 0 || !_flags.spriteEnabled || !shader)
             return;
+
+        cx = (int16_t)(cx - _render.originX);
+        cy = (int16_t)(cy - _render.originY);
 
         const float rawSweep = fabsf(endDeg - startDeg);
         const bool fullSweep = rawSweep >= 359.5f;

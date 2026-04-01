@@ -144,6 +144,7 @@ namespace pipgui
 
     void GUI::setErrorButtonsDown(bool nextDown, bool prevDown, bool comboDown)
     {
+        _manualInputMask |= ManualInput_Error;
         if (!_flags.errorActive || _error.count == 0)
             return;
         if (_flags.errorTransition)

@@ -92,6 +92,7 @@ namespace pipgui
 
     bool GUI::stepSliderState(detail::SliderState &state, int16_t &value, bool nextDown, bool prevDown)
     {
+        _navConsumed = true;
         const uint32_t now = nowMs();
         bool changed = false;
 
@@ -352,6 +353,24 @@ namespace pipgui
             rx = AutoX(w);
         if (ry == center)
             ry = AutoY(h);
+
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - kSliderUpdatePad),
+                                      (int16_t)(ry - kSliderUpdatePad),
+                                      (int16_t)(w + kSliderUpdatePad * 2),
+                                      (int16_t)(h + kSliderUpdatePad * 2),
+                                      "tiled-update-slider",
+                                      [&]()
+                                      {
+                                          drawRect()
+                                              .pos((int16_t)(rx - kSliderUpdatePad), (int16_t)(ry - kSliderUpdatePad))
+                                              .size((int16_t)(w + kSliderUpdatePad * 2), (int16_t)(h + kSliderUpdatePad * 2))
+                                              .fill(_render.bgColor565);
+                                          drawSlider(x, y, w, h, state, activeColor, inactiveColor, thumbColor);
+                                      });
+            return;
+        }
 
         const bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *const prevActive = _render.activeSprite;

@@ -524,7 +524,25 @@ namespace pipgui
 
         const int16_t rx = resolveAxis(x, w, _render.screenWidth);
         const int16_t ry = resolveAxis(y, h, _render.screenHeight);
-        constexpr int16_t pad = 3;
+        // Keep the invalidation tight to avoid erasing neighboring widgets in dirty mode.
+        constexpr int16_t pad = 2;
+
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - pad), (int16_t)(ry - pad),
+                                      (int16_t)(w + pad * 2), (int16_t)(h + pad * 2),
+                                      "tiled-update-button",
+                                      [&]()
+                                      {
+                                          drawRect()
+                                              .pos((int16_t)(rx - pad), (int16_t)(ry - pad))
+                                              .size((int16_t)(w + pad * 2), (int16_t)(h + pad * 2))
+                                              .fill(_render.bgColor565)
+                                              .draw();
+                                          drawButton(label, x, y, w, h, baseColor, radius, iconId, state);
+                                      });
+            return;
+        }
 
         bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;

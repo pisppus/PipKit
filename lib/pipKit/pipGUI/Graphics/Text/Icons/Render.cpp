@@ -249,6 +249,7 @@ namespace pipgui
     {
         if (iconId >= psdf_icons::IconCount || sizePx == 0)
             return;
+
         const psdf_icons::Icon &ic = psdf_icons::Icons[iconId];
         if (ic.w == 0 || ic.h == 0)
             return;
@@ -286,9 +287,11 @@ namespace pipgui
 
         const int16_t rx = (x == -1) ? AutoX((int32_t)sizePx) : x;
         const int16_t ry = (y == -1) ? AutoY((int32_t)sizePx) : y;
+        const int16_t rxS = (int16_t)(rx - _render.originX);
+        const int16_t ryS = (int16_t)(ry - _render.originY);
 
-        const int16_t drawX = (int16_t)(rx + inset);
-        const int16_t drawY = (int16_t)(ry + inset);
+        const int16_t drawX = (int16_t)(rxS + inset);
+        const int16_t drawY = (int16_t)(ryS + inset);
 
         int16_t ix0 = drawX, iy0 = drawY;
         int16_t ix1 = drawX + (int16_t)renderSizePx;
@@ -356,6 +359,19 @@ namespace pipgui
         const int16_t ry = (y == -1) ? AutoY((int32_t)sizePx) : y;
         constexpr int16_t pad = 2;
 
+        if (_flags.spriteEnabled && _disp.display && _flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - pad), (int16_t)(ry - pad),
+                                      (int16_t)(sizePx + pad * 2), (int16_t)(sizePx + pad * 2),
+                                      "tiled-update-icon",
+                                      [&]()
+                                      {
+                                          drawRect().pos(rx - pad, ry - pad).size(sizePx + pad * 2, sizePx + pad * 2).fill(bg565).draw();
+                                          drawIconInternal(iconId, rx, ry, sizePx, fg565);
+                                      });
+            return;
+        }
+
         bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;
         _flags.inSpritePass = 1;
@@ -413,8 +429,8 @@ namespace pipgui
         const int32_t clipB = clipY + clipH;
 
         const float drawH = (float)icon.height * scale;
-        const float drawX = (float)rx + (box - drawW) * 0.5f;
-        const float drawY = (float)ry + (box - drawH) * 0.5f;
+        const float drawX = (float)(rx - _render.originX) + (box - drawW) * 0.5f;
+        const float drawY = (float)(ry - _render.originY) + (box - drawH) * 0.5f;
         const NativeColor565 fg = makeNativeColor565(fg565);
         pipcore::Platform *const plat = platform();
         const uint32_t atlasW = (uint32_t)psdf_anim::AtlasWidth;
@@ -516,6 +532,19 @@ namespace pipgui
         const int16_t rx = (x == -1) ? AutoX((int32_t)sizePx) : x;
         const int16_t ry = (y == -1) ? AutoY((int32_t)sizePx) : y;
         constexpr int16_t pad = 3;
+
+        if (_flags.spriteEnabled && _disp.display && _flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - pad), (int16_t)(ry - pad),
+                                      (int16_t)(sizePx + pad * 2), (int16_t)(sizePx + pad * 2),
+                                      "tiled-update-anim-icon",
+                                      [&]()
+                                      {
+                                          drawRect().pos(rx - pad, ry - pad).size(sizePx + pad * 2, sizePx + pad * 2).fill(bg565).draw();
+                                          drawAnimatedIconInternal(iconId, rx, ry, sizePx, fg565, nowMs);
+                                      });
+            return;
+        }
 
         bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;

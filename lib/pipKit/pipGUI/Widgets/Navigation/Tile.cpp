@@ -127,6 +127,7 @@ namespace pipgui
             menu.nextHoldStartMs = menu.prevHoldStartMs = 0;
             menu.nextLongFired = menu.prevLongFired = false;
             menu.lastNextDown = menu.lastPrevDown = false;
+            menu.lastSelectDown = false;
             menu.marqueeStartMs = 0;
             menu.customLayout = false;
             menu.layoutCols = 0;
@@ -356,10 +357,16 @@ namespace pipgui
         if (_consumed || !_gui)
             return;
         _consumed = true;
+        _gui->_manualInputMask |= GUI::ManualInput_Tile;
         const uint8_t screenId = _gui->currentScreen();
         if (screenId == INVALID_SCREEN_ID)
             return;
-        detail::GuiAccess::handleTileInput(*_gui, screenId, _nextDown, _prevDown);
+        GUI::InputState input;
+        input.nextDown = _nextDown;
+        input.prevDown = _prevDown;
+        input.selectDown = _selectDown;
+        input.hasSelect = _hasSelect;
+        detail::GuiAccess::handleTileInput(*_gui, screenId, input);
     }
 
     void UpdateTileFluent::apply()
@@ -451,10 +458,12 @@ namespace pipgui
         }
     }
 
-    void GUI::handleTileInput(uint8_t screenId,
-                              bool nextDown,
-                              bool prevDown)
+    void GUI::handleTileInput(uint8_t screenId, const InputState &input)
     {
+        const bool nextDown = input.nextDown;
+        const bool prevDown = input.prevDown;
+        const bool selectDown = input.hasSelect ? input.selectDown : false;
+
         TileState *pm = getTile(screenId);
         if (!pm)
             return;
@@ -472,6 +481,7 @@ namespace pipgui
             m.prevLongFired = false;
             m.lastNextDown = false;
             m.lastPrevDown = false;
+            m.lastSelectDown = false;
             return;
         }
 #endif
@@ -482,6 +492,17 @@ namespace pipgui
         bool changed = false;
 
         const uint32_t holdMs = 400;
+        const bool selectPressed = input.hasSelect && selectDown && !m.lastSelectDown;
+
+        if (selectPressed)
+        {
+            if (m.selectedIndex < m.itemCount)
+            {
+                uint8_t target = m.items[m.selectedIndex].targetScreen;
+                if (target != INVALID_SCREEN_ID)
+                    activateScreenId(target, 1);
+            }
+        }
 
         if (nextDown)
         {
@@ -490,7 +511,7 @@ namespace pipgui
                 m.nextHoldStartMs = now;
                 m.nextLongFired = false;
             }
-            else if (!m.nextLongFired && m.nextHoldStartMs && (now - m.nextHoldStartMs) >= holdMs)
+            else if (!input.hasSelect && !m.nextLongFired && m.nextHoldStartMs && (now - m.nextHoldStartMs) >= holdMs)
             {
                 if (m.selectedIndex < m.itemCount)
                 {
@@ -525,7 +546,7 @@ namespace pipgui
             }
             else if (!m.prevLongFired && m.prevHoldStartMs && (now - m.prevHoldStartMs) >= holdMs)
             {
-                prevScreen();
+                backScreen();
                 m.prevLongFired = true;
             }
         }
@@ -546,6 +567,7 @@ namespace pipgui
 
         m.lastNextDown = nextDown;
         m.lastPrevDown = prevDown;
+        m.lastSelectDown = selectDown;
 
         if (changed)
         {
@@ -633,7 +655,7 @@ namespace pipgui
         for (uint8_t i = 0; i < dirtyCount; ++i)
         {
             const DirtyRect &dirty = dirtyRects[i];
-            _render.sprite.setClipRect(dirty.x, dirty.y, dirty.w, dirty.h);
+            _render.sprite.setClipRect((int16_t)(dirty.x - _render.originX), (int16_t)(dirty.y - _render.originY), dirty.w, dirty.h);
             renderTileScreen(screenId);
         }
 
@@ -674,9 +696,11 @@ namespace pipgui
         if (baseClipW <= 0 || baseClipH <= 0)
             return;
         const ClipState prevRootGuiClip = _clip;
+        const int16_t ox = _render.originX;
+        const int16_t oy = _render.originY;
         _clip.enabled = true;
-        _clip.x = (int16_t)baseClipX;
-        _clip.y = (int16_t)baseClipY;
+        _clip.x = (int16_t)(baseClipX + ox);
+        _clip.y = (int16_t)(baseClipY + oy);
         _clip.w = (int16_t)baseClipW;
         _clip.h = (int16_t)baseClipH;
 
@@ -866,10 +890,12 @@ namespace pipgui
 
             int16_t contentY = baseY;
             const ClipState prevGuiClip = _clip;
+            const int16_t ox = _render.originX;
+            const int16_t oy = _render.originY;
             int32_t prevClipX = 0, prevClipY = 0, prevClipW = 0, prevClipH = 0;
             t->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
             applyClip(contentClipX, contentClipY, contentClipW, contentClipH);
-            t->setClipRect(_clip.x, _clip.y, _clip.w, _clip.h);
+            t->setClipRect((int16_t)(_clip.x - ox), (int16_t)(_clip.y - oy), _clip.w, _clip.h);
 
             if (iconSize > 0)
             {

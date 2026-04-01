@@ -318,7 +318,7 @@ namespace pipgui
 
     void GUI::clearStatusBarIcon(TextAlign side)
     {
-        setStatusBarIcon(side, kInvalidStatusBarIcon);
+        setStatusBarIcon(side, kInvalidStatusBarIcon, -1, 0);
     }
 
     bool GUI::statusBarAnimationActive() const noexcept

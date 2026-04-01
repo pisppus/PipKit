@@ -62,9 +62,9 @@ namespace pipgui
                 return gui.getTile(screenId);
             }
 
-            static void handleListInput(GUI &gui, uint8_t screenId, bool nextDown, bool prevDown)
+            static void handleListInput(GUI &gui, uint8_t screenId, const GUI::InputState &input)
             {
-                gui.handleListInput(screenId, nextDown, prevDown);
+                gui.handleListInput(screenId, input);
             }
 
             static bool updateListScreen(GUI &gui, uint8_t screenId)
@@ -72,9 +72,9 @@ namespace pipgui
                 return gui.updateListScreen(screenId);
             }
 
-            static void handleTileInput(GUI &gui, uint8_t screenId, bool nextDown, bool prevDown)
+            static void handleTileInput(GUI &gui, uint8_t screenId, const GUI::InputState &input)
             {
-                gui.handleTileInput(screenId, nextDown, prevDown);
+                gui.handleTileInput(screenId, input);
             }
 
             static void renderTileScreen(GUI &gui, uint8_t screenId)
@@ -82,9 +82,9 @@ namespace pipgui
                 gui.renderTileScreen(screenId);
             }
 
-            static void handlePopupMenuInput(GUI &gui, bool nextDown, bool prevDown)
+            static void handlePopupMenuInput(GUI &gui, const GUI::InputState &input)
             {
-                gui.handlePopupMenuInput(nextDown, prevDown);
+                gui.handlePopupMenuInput(input);
             }
 
             static const GUI::InputState &inputState(GUI &gui)

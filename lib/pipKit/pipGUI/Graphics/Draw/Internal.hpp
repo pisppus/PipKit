@@ -113,7 +113,9 @@ namespace pipgui
         {
             for (uint32_t i = 0; i <= 256; ++i)
             {
-                float d = (float)i * (1.0f / 255.0f);
+                // `i` is in [0..256]. Use 256 as the "1.0" sentinel to keep the last
+                // pre-sentinel entry (255) non-zero, otherwise AA lines can get gaps.
+                float d = (float)i * (1.0f / 256.0f);
                 if (d >= 1.0f)
                 {
                     table[i] = 0;

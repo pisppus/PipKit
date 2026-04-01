@@ -322,11 +322,13 @@ namespace pipgui
         auto target = getDrawTarget();
         if (!target)
             return;
+        const int16_t ox = _render.originX;
+        const int16_t oy = _render.originY;
         const ClipState prevGuiClip = _clip;
         int32_t prevClipX = 0, prevClipY = 0, prevClipW = 0, prevClipH = 0;
         target->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
         applyClip(clipX, y, clipW, h);
-        target->setClipRect(clipX, y, clipW, h);
+        target->setClipRect((int16_t)(clipX - ox), (int16_t)(y - oy), clipW, h);
         drawTextAligned(text, tx, ty, textColor565, bgColor565, TextAlign::Left);
         _clip = prevGuiClip;
         target->setClipRect(prevClipX, prevClipY, prevClipW, prevClipH);
@@ -722,7 +724,9 @@ namespace pipgui
 
         int32_t clipX = 0, clipY = 0, clipW = 0, clipH = 0;
         _render.sprite.getClipRect(&clipX, &clipY, &clipW, &clipH);
-        _render.sprite.setClipRect(cx, (int16_t)(ry - updatePad), cw, (int16_t)(h + updatePad * 2));
+        const int16_t ox = _render.originX;
+        const int16_t oy = _render.originY;
+        _render.sprite.setClipRect((int16_t)(cx - ox), (int16_t)((ry - updatePad) - oy), cw, (int16_t)(h + updatePad * 2));
 
         bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;

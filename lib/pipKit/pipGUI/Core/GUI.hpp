@@ -3,10 +3,12 @@
 #include <pipCore/Display.hpp>
 #include <pipCore/Graphics/Sprite.hpp>
 #include <pipGUI/Core/Types.hpp>
+#include <pipGUI/Core/Debug.hpp>
 #include <pipGUI/Core/Internal/GuiState.hpp>
 #include <pipGUI/Graphics/Utils/Colors.hpp>
 #include <pipGUI/Systems/Network/Wifi.hpp>
 #include <pipGUI/Systems/Update/Ota.hpp>
+#include <algorithm>
 
 #if (PIPGUI_SCREENSHOT_MODE == 2)
 #include <FS.h>
@@ -138,7 +140,10 @@ namespace pipgui
             bool prevDown = false;
             bool nextPressed = false;
             bool prevPressed = false;
+            bool selectDown = false;
+            bool selectPressed = false;
             bool comboDown = false;
+            bool hasSelect = false;
         };
 
         GUI();
@@ -153,7 +158,7 @@ namespace pipgui
         [[nodiscard]] ConfigureBacklightFluent setBacklight();
         [[nodiscard]] SetClipFluent setClip();
         [[nodiscard]] ShowLogoFluent showLogo();
-        void begin(uint8_t rotation = 0);
+        void begin(uint8_t rotation = 0, bool forceTiles = false);
 
         void setBacklightHandler(BacklightHandler handler) noexcept;
         void setBrightness(uint8_t percent);
@@ -164,11 +169,16 @@ namespace pipgui
         pipcore::Display &display();
         [[nodiscard]] pipcore::Display *displayPtr() const noexcept { return _disp.display; }
         [[nodiscard]] bool displayReady() const noexcept { return _disp.display != nullptr; }
+        [[nodiscard]] bool tiledMode() const noexcept { return _flags.tiledMode; }
 
         [[nodiscard]] bool startScreenshot();
         [[nodiscard]] uint8_t screenshotCount() const noexcept { return _shots.count; }
         [[nodiscard]] DrawScreenshotFluent drawScreenshot();
         InputState pollInput(Button &next, Button &prev);
+        InputState pollInput(Button &next, Button &prev, Button &select);
+        // For custom input logic: disables built-in next/prev screen navigation for the current tick.
+        // Typical flow: pollInput(...) -> custom logic -> consumeAutoNav() -> loopWithPolledInput().
+        void consumeAutoNav() noexcept { _navConsumed = true; _manualInputMask |= ManualInput_Nav; }
         void setAdaptivePreview(uint16_t minWidth, uint16_t minHeight, uint32_t cycleMs = 3600);
         void clearAdaptivePreview() noexcept;
         void setRotation(uint8_t rotation, uint32_t durationMs = 520);
@@ -296,8 +306,16 @@ namespace pipgui
         [[nodiscard]] bool screenTransitionActive() const noexcept;
         void nextScreen();
         void prevScreen();
+        void backScreen();
+
+        // Graph pause (3-button mode: toggled by Select on graph screens; see API.md)
+        [[nodiscard]] bool graphPaused() const noexcept;
+        void setGraphPaused(bool paused) noexcept;
+        [[nodiscard]] bool GraphPauseToggled() noexcept;
         void loop();
         void loopWithInput(Button &next, Button &prev);
+        void loopWithInput(Button &next, Button &prev, Button &select);
+        void loopWithPolledInput();
         void requestRedraw();
         void setScreenAnim(ScreenAnim anim, uint32_t durationMs);
         void clearClip();
@@ -334,10 +352,23 @@ namespace pipgui
     private:
         friend struct detail::GuiAccess;
         friend struct detail::TextFontGuard;
+        friend struct ListInputFluent;
+        friend struct TileInputFluent;
+        friend struct PopupMenuInputFluent;
         using DirtyRect = detail::DirtyRect;
         using ClipState = detail::ClipState;
         using ScreenshotEntry = detail::ScreenshotEntry;
         static constexpr uint8_t DIRTY_RECT_MAX = detail::DIRTY_RECT_MAX;
+
+        enum ManualInputMask : uint8_t
+        {
+            ManualInput_List = 1u << 0,
+            ManualInput_Tile = 1u << 1,
+            ManualInput_Popup = 1u << 2,
+            ManualInput_Notif = 1u << 3,
+            ManualInput_Error = 1u << 4,
+            ManualInput_Nav = 1u << 5,
+        };
         detail::DisplayState _disp;
         detail::RenderState _render;
         detail::ClipState _clip;
@@ -354,10 +385,14 @@ namespace pipgui
         detail::Flags _flags = {};
         detail::DiagnosticsState _diag;
         InputState _input = {};
+        uint8_t _manualInputMask = 0;
+        bool _navConsumed = false;
         detail::ButtonCacheState _buttonCache;
         detail::SliderCacheState _sliderCache;
         detail::TextCacheState _textCache;
         detail::ToggleCacheState _toggleCache;
+
+        InputState pollInputInternal(Button &next, Button &prev, Button *select);
         detail::DrumRollCacheState _drumRollCache;
         detail::ScreenshotGalleryState _shots;
         detail::ScreenshotStreamState _shotStream;
@@ -365,6 +400,7 @@ namespace pipgui
         detail::RotationState _rotationAnim;
 
         uint32_t nowMs() const;
+        void loopTiled(uint32_t now);
         [[nodiscard]] bool adaptivePreviewActive() const noexcept;
         [[nodiscard]] bool logicalRotationActive() const noexcept;
         [[nodiscard]] uint8_t logicalRotationDelta() const noexcept;
@@ -413,6 +449,102 @@ namespace pipgui
                                  int16_t srcX, int16_t srcY,
                                  int16_t w, int16_t h,
                                  const char *stage);
+
+        template <typename RenderFn>
+        void tiledRenderAndPresentRect(int16_t x, int16_t y, int16_t w, int16_t h, const char *stage, RenderFn &&renderFn)
+        {
+            if (!_flags.tiledMode || !_flags.spriteEnabled || !_disp.display || w <= 0 || h <= 0)
+                return;
+
+            const int16_t sw = (int16_t)_render.screenWidth;
+            const int16_t sh = (int16_t)_render.screenHeight;
+            const int16_t tileH = _render.sprite.height();
+            const int16_t stride = _render.sprite.width();
+            auto *buf = static_cast<uint16_t *>(_render.sprite.getBuffer());
+            if (!buf || sw <= 0 || sh <= 0 || tileH <= 0 || stride <= 0)
+                return;
+
+            const bool debugDirty = Debug::dirtyRectEnabled();
+            const uint16_t debugCol = debugDirty ? pipcore::Sprite::swap16(Debug::dirtyRectActiveColor()) : 0;
+            const bool prevRender = _flags.inSpritePass;
+            pipcore::Sprite *const prevActive = _render.activeSprite;
+            const ClipState prevClip = _clip;
+            int32_t prevClipX = 0, prevClipY = 0, prevClipW = 0, prevClipH = 0;
+            _render.sprite.getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
+            const int16_t prevOriginX = _render.originX;
+            const int16_t prevOriginY = _render.originY;
+
+            const int16_t rectX1 = (x < 0) ? (int16_t)0 : x;
+            const int16_t rectY1 = (y < 0) ? (int16_t)0 : y;
+            const int16_t rectX2 = (int16_t)std::min<int32_t>(sw, (int32_t)x + w);
+            const int16_t rectY2 = (int16_t)std::min<int32_t>(sh, (int32_t)y + h);
+            if (rectX2 <= rectX1 || rectY2 <= rectY1)
+                return;
+
+            for (int16_t tileY = 0; tileY < sh; tileY = (int16_t)(tileY + tileH))
+            {
+                const int16_t tileBottom = (int16_t)std::min<int32_t>(sh, (int32_t)tileY + tileH);
+                const int16_t y1 = rectY1 < tileY ? tileY : rectY1;
+                const int16_t y2 = rectY2 > tileBottom ? tileBottom : rectY2;
+                const int16_t hh = (int16_t)(y2 - y1);
+                if (hh <= 0)
+                    continue;
+
+                _render.originX = 0;
+                _render.originY = tileY;
+                _render.sprite.setClipRect(0, 0, stride, tileH);
+
+                _clip.enabled = true;
+                _clip.x = rectX1;
+                _clip.y = rectY1;
+                _clip.w = (int16_t)(rectX2 - rectX1);
+                _clip.h = (int16_t)(rectY2 - rectY1);
+
+                _flags.inSpritePass = 1;
+                _render.activeSprite = &_render.sprite;
+                renderFn();
+                _render.activeSprite = prevActive;
+                _flags.inSpritePass = prevRender;
+
+                const int16_t ww = (int16_t)(rectX2 - rectX1);
+                const int16_t srcY = (int16_t)(y1 - tileY);
+                if (debugDirty && ww > 1 && hh > 1)
+                {
+                    const int16_t localX0 = rectX1;
+                    const int16_t localY0 = srcY;
+                    const int16_t localX1 = (int16_t)(rectX1 + ww - 1);
+                    const int16_t localY1 = (int16_t)(srcY + hh - 1);
+
+                    const bool drawTop = (y1 == rectY1);
+                    const bool drawBottom = (y2 == rectY2);
+                    if (drawTop)
+                    {
+                        for (int16_t px = localX0; px <= localX1; ++px)
+                            buf[(int32_t)localY0 * stride + px] = debugCol;
+                    }
+                    if (drawBottom)
+                    {
+                        for (int16_t px = localX0; px <= localX1; ++px)
+                            buf[(int32_t)localY1 * stride + px] = debugCol;
+                    }
+                    for (int16_t py = localY0; py <= localY1; ++py)
+                    {
+                        buf[(int32_t)py * stride + localX0] = debugCol;
+                        buf[(int32_t)py * stride + localX1] = debugCol;
+                    }
+                }
+
+                _disp.display->writeRect565(rectX1, y1, ww, hh, buf + (size_t)srcY * stride + rectX1, stride);
+                reportPlatformErrorOnce(stage);
+            }
+
+            _render.originX = prevOriginX;
+            _render.originY = prevOriginY;
+            _clip = prevClip;
+            _render.sprite.setClipRect((int16_t)prevClipX, (int16_t)prevClipY, (int16_t)prevClipW, (int16_t)prevClipH);
+            _render.activeSprite = prevActive;
+            _flags.inSpritePass = prevRender;
+        }
 
         pipcore::Sprite *getDrawTarget();
         detail::ButtonState &resolveButtonState(const String &label, int16_t x, int16_t y,
@@ -676,7 +808,7 @@ namespace pipgui
         ListState *getList(uint8_t screenId);
         TileState *getTile(uint8_t screenId);
 
-        void handleListInput(uint8_t screenId, bool nextDown, bool prevDown);
+        void handleListInput(uint8_t screenId, const InputState &input);
         bool renderListState(ListState &menu,
                              int16_t x, int16_t y,
                              int16_t w, int16_t h,
@@ -688,7 +820,7 @@ namespace pipgui
                               int16_t w, int16_t h,
                               uint16_t bgColor565);
         void updateTile(uint8_t screenId, uint8_t prevSelectedIndex);
-        void handleTileInput(uint8_t screenId, bool nextDown, bool prevDown);
+        void handleTileInput(uint8_t screenId, const InputState &input);
         void setupTileState(uint8_t screenId,
                             const TileItemDef *items,
                             uint8_t itemCount,
@@ -713,7 +845,7 @@ namespace pipgui
                                    int16_t anchorY,
                                    int16_t anchorW,
                                    int16_t anchorH);
-        void handlePopupMenuInput(bool nextDown, bool prevDown);
+        void handlePopupMenuInput(const InputState &input);
         void showToastInternal(const String &text,
                                bool fromTop,
                                IconId iconId);

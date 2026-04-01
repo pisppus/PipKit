@@ -99,6 +99,7 @@ namespace pipgui
         menu.nextHoldStartMs = menu.prevHoldStartMs = 0;
         menu.nextLongFired = menu.prevLongFired = false;
         menu.lastNextDown = menu.lastPrevDown = false;
+        menu.lastSelectDown = false;
         menu.scrollbarAlpha = 0;
         menu.marqueeStartMs = 0;
         menu.lastScrollActivityMs = menu.lastUpdateMs = 0;
@@ -194,8 +195,12 @@ namespace pipgui
             detail::GuiAccess::updateListScreen(*_gui, screenId);
     }
 
-    void GUI::handleListInput(uint8_t screenId, bool nextDown, bool prevDown)
+    void GUI::handleListInput(uint8_t screenId, const InputState &input)
     {
+        const bool nextDown = input.nextDown;
+        const bool prevDown = input.prevDown;
+        const bool selectDown = input.hasSelect ? input.selectDown : false;
+
         ListState *menuPtr = getList(screenId);
         if (!menuPtr)
             return;
@@ -212,6 +217,7 @@ namespace pipgui
             menu.prevLongFired = false;
             menu.lastNextDown = false;
             menu.lastPrevDown = false;
+            menu.lastSelectDown = false;
             return;
         }
 #endif
@@ -219,6 +225,17 @@ namespace pipgui
         const uint32_t now = nowMs();
         bool changed = false;
         const uint32_t holdMs = 400;
+        const bool selectPressed = input.hasSelect && selectDown && !menu.lastSelectDown;
+
+        if (selectPressed)
+        {
+            if (menu.selectedIndex < menu.itemCount)
+            {
+                uint8_t target = menu.items[menu.selectedIndex].targetScreen;
+                if (target != INVALID_SCREEN_ID)
+                    activateScreenId(target, 1);
+            }
+        }
 
         if (nextDown)
         {
@@ -227,7 +244,7 @@ namespace pipgui
                 menu.nextHoldStartMs = now;
                 menu.nextLongFired = false;
             }
-            else if (!menu.nextLongFired && menu.nextHoldStartMs && (now - menu.nextHoldStartMs) >= holdMs)
+            else if (!input.hasSelect && !menu.nextLongFired && menu.nextHoldStartMs && (now - menu.nextHoldStartMs) >= holdMs)
             {
                 if (menu.selectedIndex < menu.itemCount)
                 {
@@ -262,7 +279,7 @@ namespace pipgui
             }
             else if (!menu.prevLongFired && menu.prevHoldStartMs && (now - menu.prevHoldStartMs) >= holdMs)
             {
-                prevScreen();
+                backScreen();
                 menu.prevLongFired = true;
             }
         }
@@ -283,6 +300,7 @@ namespace pipgui
 
         menu.lastNextDown = nextDown;
         menu.lastPrevDown = prevDown;
+        menu.lastSelectDown = selectDown;
 
         if (changed)
         {
@@ -377,8 +395,14 @@ namespace pipgui
             const ClipState prevGuiClip = _clip;
             int32_t clipX = 0, clipY = 0, clipW = 0, clipH = 0;
             target->getClipRect(&clipX, &clipY, &clipW, &clipH);
+            const int16_t ox = _render.originX;
+            const int16_t oy = _render.originY;
+            const int32_t clipXs = clipX + ox;
+            const int32_t clipYs = clipY + oy;
+            const int32_t clipRs = clipXs + clipW;
+            const int32_t clipBs = clipYs + clipH;
             applyClip(left, top, w, h);
-            target->setClipRect(left, top, w, h);
+            target->setClipRect((int16_t)(left - ox), (int16_t)(top - oy), w, h);
 
             int32_t bgL = left;
             int32_t bgT = top;
@@ -387,26 +411,23 @@ namespace pipgui
 
             if (clipW > 0 && clipH > 0)
             {
-                int32_t cR = clipX + clipW;
-                int32_t cB = clipY + clipH;
-
-                if (bgL < clipX)
-                    bgL = clipX;
-                if (bgT < clipY)
-                    bgT = clipY;
-                if (bgR > cR)
-                    bgR = cR;
-                if (bgB > cB)
-                    bgB = cB;
+                if (bgL < clipXs)
+                    bgL = clipXs;
+                if (bgT < clipYs)
+                    bgT = clipYs;
+                if (bgR > clipRs)
+                    bgR = clipRs;
+                if (bgB > clipBs)
+                    bgB = clipBs;
             }
 
             const int32_t bgW = bgR - bgL;
             const int32_t bgH = bgB - bgT;
             if (bgW > 0 && bgH > 0)
-                target->fillRect((int16_t)bgL, (int16_t)bgT, (int16_t)bgW, (int16_t)bgH, bgColor565);
+                target->fillRect((int16_t)(bgL - ox), (int16_t)(bgT - oy), (int16_t)bgW, (int16_t)bgH, bgColor565);
 
             applyClip(left, contentTop, w, contentBottom - contentTop);
-            target->setClipRect(left, contentTop, w, contentBottom - contentTop);
+            target->setClipRect((int16_t)(left - ox), (int16_t)(contentTop - oy), w, contentBottom - contentTop);
 
             int16_t visibleHeight = contentBottom - contentTop;
             if (visibleHeight < cardH)
@@ -701,7 +722,7 @@ namespace pipgui
                     target->getClipRect(&prevItemClipX, &prevItemClipY, &prevItemClipW, &prevItemClipH);
                     const ClipState prevItemGuiClip = _clip;
                     applyClip(textClipX, itemClipY, textClipW, itemClipH);
-                    target->setClipRect(textClipX, itemClipY, textClipW, itemClipH);
+                    target->setClipRect((int16_t)(textClipX - ox), (int16_t)(itemClipY - oy), textClipW, itemClipH);
 
                     setTextFont(TITLE_WEIGHT, titlePx);
                     drawTextLine(item.title, textX, baseY, textMaxWidth, textColor, bg, active);
@@ -806,7 +827,7 @@ namespace pipgui
                 target->getClipRect(&prevItemClipX, &prevItemClipY, &prevItemClipW, &prevItemClipH);
                 const ClipState prevItemGuiClip = _clip;
                 applyClip(textClipX, itemClipY, textClipW, itemClipH);
-                target->setClipRect(textClipX, itemClipY, textClipW, itemClipH);
+                target->setClipRect((int16_t)(textClipX - ox), (int16_t)(itemClipY - oy), textClipW, itemClipH);
 
                 setTextFont(TITLE_WEIGHT, titlePx);
                 drawTextLine(item.title, textX, titleY, textMaxWidth, textColor, bg, active);
@@ -883,7 +904,7 @@ namespace pipgui
             }
 
             applyClip(left, top, w, h);
-            target->setClipRect(left, top, w, h);
+            target->setClipRect((int16_t)(left - ox), (int16_t)(top - oy), w, h);
 
             if (hasScrollbar && menu.scrollbarAlpha > 5)
             {

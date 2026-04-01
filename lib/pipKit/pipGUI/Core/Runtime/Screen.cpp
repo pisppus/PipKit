@@ -55,6 +55,29 @@ namespace pipgui
         if (_screen.to >= _screen.capacity || !_flags.spriteEnabled || !_disp.display || (!targetHasCallback && !targetIsList && !targetIsTile))
         {
             _screen.current = _screen.to;
+            {
+                const InputState &in = _input;
+                if (ListState *list = getList(_screen.current))
+                {
+                    list->nextHoldStartMs = 0;
+                    list->prevHoldStartMs = 0;
+                    list->nextLongFired = false;
+                    list->prevLongFired = false;
+                    list->lastNextDown = in.nextDown;
+                    list->lastPrevDown = in.prevDown;
+                    list->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                }
+                if (TileState *tile = getTile(_screen.current))
+                {
+                    tile->nextHoldStartMs = 0;
+                    tile->prevHoldStartMs = 0;
+                    tile->nextLongFired = false;
+                    tile->prevLongFired = false;
+                    tile->lastNextDown = in.nextDown;
+                    tile->lastPrevDown = in.prevDown;
+                    tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                }
+            }
             _flags.needRedraw = 1;
             _flags.screenTransition = 0;
             return;
@@ -206,6 +229,29 @@ namespace pipgui
             {
                 _flags.screenTransition = 0;
                 _screen.current = _screen.to;
+                {
+                    const InputState &in = _input;
+                    if (ListState *list = getList(_screen.current))
+                    {
+                        list->nextHoldStartMs = 0;
+                        list->prevHoldStartMs = 0;
+                        list->nextLongFired = false;
+                        list->prevLongFired = false;
+                        list->lastNextDown = in.nextDown;
+                        list->lastPrevDown = in.prevDown;
+                        list->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                    }
+                    if (TileState *tile = getTile(_screen.current))
+                    {
+                        tile->nextHoldStartMs = 0;
+                        tile->prevHoldStartMs = 0;
+                        tile->nextLongFired = false;
+                        tile->prevLongFired = false;
+                        tile->lastNextDown = in.nextDown;
+                        tile->lastPrevDown = in.prevDown;
+                        tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                    }
+                }
                 if (keepStatusBarStatic)
                 {
                     renderStatusBar();
@@ -456,6 +502,29 @@ namespace pipgui
         {
             _flags.screenTransition = 0;
             _screen.current = _screen.to;
+            {
+                const InputState &in = _input;
+                if (ListState *list = getList(_screen.current))
+                {
+                    list->nextHoldStartMs = 0;
+                    list->prevHoldStartMs = 0;
+                    list->nextLongFired = false;
+                    list->prevLongFired = false;
+                    list->lastNextDown = in.nextDown;
+                    list->lastPrevDown = in.prevDown;
+                    list->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                }
+                if (TileState *tile = getTile(_screen.current))
+                {
+                    tile->nextHoldStartMs = 0;
+                    tile->prevHoldStartMs = 0;
+                    tile->nextLongFired = false;
+                    tile->prevLongFired = false;
+                    tile->lastNextDown = in.nextDown;
+                    tile->lastPrevDown = in.prevDown;
+                    tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
+                }
+            }
             _flags.needRedraw = 0;
             _dirty.count = 0;
             Debug::clearRects();

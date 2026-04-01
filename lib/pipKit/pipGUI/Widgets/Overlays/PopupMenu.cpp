@@ -146,6 +146,7 @@ namespace pipgui
             list.prevLongFired = false;
             list.lastNextDown = false;
             list.lastPrevDown = false;
+            list.lastSelectDown = false;
             list.scrollbarAlpha = 0;
             list.lastScrollActivityMs = 0;
             list.marqueeStartMs = 0;
@@ -288,8 +289,12 @@ namespace pipgui
         requestRedraw();
     }
 
-    void GUI::handlePopupMenuInput(bool nextDown, bool prevDown)
+    void GUI::handlePopupMenuInput(const InputState &input)
     {
+        const bool nextDown = input.nextDown;
+        const bool prevDown = input.prevDown;
+        const bool selectDown = input.hasSelect ? input.selectDown : false;
+
         if (!_flags.popupActive || _flags.popupClosing || _popup.list.itemCount == 0)
             return;
 
@@ -300,16 +305,34 @@ namespace pipgui
             const uint32_t readyAfter = _popup.animDurationMs ? _popup.animDurationMs : 1;
             list.lastNextDown = nextDown;
             list.lastPrevDown = prevDown;
-            if ((now - _popup.startMs) < readyAfter || nextDown || prevDown)
+            list.lastSelectDown = selectDown;
+            if ((now - _popup.startMs) < readyAfter || nextDown || prevDown || selectDown)
                 return;
             _popup.inputArmed = true;
             list.lastNextDown = false;
             list.lastPrevDown = false;
+            list.lastSelectDown = false;
             return;
         }
 
         bool changed = false;
         const uint32_t holdMs = 400;
+        const bool selectPressed = input.hasSelect && selectDown && !list.lastSelectDown;
+
+        if (selectPressed)
+        {
+            _popup.rememberedItems = _popup.items;
+            _popup.rememberedCount = list.itemCount;
+            _popup.rememberedIndex = list.selectedIndex;
+            list.checkedIndex = list.selectedIndex;
+            _popup.resultIndex = (int16_t)list.selectedIndex;
+            _popup.resultReady = true;
+            _flags.popupClosing = 1;
+            _popup.startMs = now;
+            requestRedraw();
+            list.lastSelectDown = selectDown;
+            return;
+        }
 
         if (nextDown)
         {
@@ -318,7 +341,7 @@ namespace pipgui
                 list.nextHoldStartMs = now;
                 list.nextLongFired = false;
             }
-            else if (!list.nextLongFired && list.nextHoldStartMs && (now - list.nextHoldStartMs) >= holdMs)
+            else if (!input.hasSelect && !list.nextLongFired && list.nextHoldStartMs && (now - list.nextHoldStartMs) >= holdMs)
             {
                 _popup.rememberedItems = _popup.items;
                 _popup.rememberedCount = list.itemCount;
@@ -379,6 +402,7 @@ namespace pipgui
 
         list.lastNextDown = nextDown;
         list.lastPrevDown = prevDown;
+        list.lastSelectDown = selectDown;
 
         if (changed)
         {
@@ -423,7 +447,7 @@ namespace pipgui
         int32_t clipX = 0, clipY = 0, clipW = 0, clipH = 0;
         target->getClipRect(&clipX, &clipY, &clipW, &clipH);
         applyClip(frame.x, frame.y, frame.w, frame.revealH);
-        target->setClipRect(frame.x, frame.y, frame.w, frame.revealH);
+        target->setClipRect((int16_t)(frame.x - _render.originX), (int16_t)(frame.y - _render.originY), frame.w, frame.revealH);
 
         const uint16_t shadow565 = (uint16_t)detail::blend565((uint16_t)0x0000, _popup.bg565, 80);
         drawSquircleRect()

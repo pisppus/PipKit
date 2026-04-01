@@ -175,7 +175,7 @@ namespace pipgui
             uint16_t *buf = (uint16_t *)_render.sprite.getBuffer();
             if (buf)
             {
-                const size_t len = _render.screenWidth * _render.screenHeight;
+                const size_t len = (size_t)_render.sprite.width() * (size_t)_render.sprite.height();
                 uint8_t lut5[32];
                 uint8_t lut6[64];
 

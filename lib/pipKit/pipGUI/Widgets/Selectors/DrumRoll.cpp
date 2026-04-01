@@ -92,6 +92,20 @@ namespace pipgui
 
         if (_flags.spriteEnabled && _disp.display && !_flags.inSpritePass)
         {
+            if (_flags.tiledMode)
+            {
+                tiledRenderAndPresentRect(x, y, w, h, "tiled-update-drumroll-h", [&]()
+                                          {
+                                              drawRect()
+                                                  .pos(x, y)
+                                                  .size(w, h)
+                                                  .fill(detail::color888To565(bgColor))
+                                                  .draw();
+                                              drawDrumRollHorizontal(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs);
+                                          });
+                return;
+            }
+
             const bool prevRender = _flags.inSpritePass;
             pipcore::Sprite *const prevActive = _render.activeSprite;
 
@@ -146,7 +160,7 @@ namespace pipgui
         {
             spr->getClipRect(&clipX, &clipY, &clipW, &clipH);
             applyClip(x, y, w, h);
-            spr->setClipRect(x, y, w, h);
+            spr->setClipRect((int16_t)(x - _render.originX), (int16_t)(y - _render.originY), w, h);
         }
 
         for (uint8_t i = 0; i < count; ++i)
@@ -199,6 +213,20 @@ namespace pipgui
 
         if (_flags.spriteEnabled && _disp.display && !_flags.inSpritePass)
         {
+            if (_flags.tiledMode)
+            {
+                tiledRenderAndPresentRect(x, y, w, h, "tiled-update-drumroll-v", [&]()
+                                          {
+                                              drawRect()
+                                                  .pos(x, y)
+                                                  .size(w, h)
+                                                  .fill(detail::color888To565(bgColor))
+                                                  .draw();
+                                              drawDrumRollVertical(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs);
+                                          });
+                return;
+            }
+
             const bool prevRender = _flags.inSpritePass;
             pipcore::Sprite *const prevActive = _render.activeSprite;
 
@@ -253,7 +281,7 @@ namespace pipgui
         {
             spr->getClipRect(&clipX, &clipY, &clipW, &clipH);
             applyClip(x, y, w, h);
-            spr->setClipRect(x, y, w, h);
+            spr->setClipRect((int16_t)(x - _render.originX), (int16_t)(y - _render.originY), w, h);
         }
 
         for (uint8_t i = 0; i < count; ++i)

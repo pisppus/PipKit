@@ -257,6 +257,24 @@ namespace pipgui
         if (ry == center)
             ry = AutoY(h);
 
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - kToggleUpdatePad),
+                                      (int16_t)(ry - kToggleUpdatePad),
+                                      (int16_t)(w + kToggleUpdatePad * 2),
+                                      (int16_t)(h + kToggleUpdatePad * 2),
+                                      "tiled-update-toggle",
+                                      [&]()
+                                      {
+                                          drawRect()
+                                              .pos((int16_t)(rx - kToggleUpdatePad), (int16_t)(ry - kToggleUpdatePad))
+                                              .size((int16_t)(w + kToggleUpdatePad * 2), (int16_t)(h + kToggleUpdatePad * 2))
+                                              .fill(_render.bgColor565);
+                                          drawToggleSwitch(x, y, w, h, state, activeColor, inactiveColor, knobColor);
+                                      });
+            return;
+        }
+
         const bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *const prevActive = _render.activeSprite;
 

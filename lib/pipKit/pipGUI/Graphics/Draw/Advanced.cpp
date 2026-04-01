@@ -178,6 +178,9 @@ namespace pipgui
         if (rx <= 0 || ry <= 0 || !_flags.spriteEnabled)
             return;
 
+        cx = (int16_t)(cx - _render.originX);
+        cy = (int16_t)(cy - _render.originY);
+
         auto spr = getDrawTarget();
         Surface565 s;
         if (!getSurface565(spr, s))
@@ -247,6 +250,9 @@ namespace pipgui
     {
         if (rx <= 0 || ry <= 0 || !_flags.spriteEnabled)
             return;
+
+        cx = (int16_t)(cx - _render.originX);
+        cy = (int16_t)(cy - _render.originY);
 
         auto spr = getDrawTarget();
         Surface565 s;
@@ -349,6 +355,13 @@ namespace pipgui
     {
         if (!_flags.spriteEnabled)
             return;
+
+        x0 = (int16_t)(x0 - _render.originX);
+        y0 = (int16_t)(y0 - _render.originY);
+        x1 = (int16_t)(x1 - _render.originX);
+        y1 = (int16_t)(y1 - _render.originY);
+        x2 = (int16_t)(x2 - _render.originX);
+        y2 = (int16_t)(y2 - _render.originY);
 
         auto spr = getDrawTarget();
         Surface565 s;
@@ -471,6 +484,13 @@ namespace pipgui
         if (!_flags.spriteEnabled)
             return;
 
+        x0 = (int16_t)(x0 - _render.originX);
+        y0 = (int16_t)(y0 - _render.originY);
+        x1 = (int16_t)(x1 - _render.originX);
+        y1 = (int16_t)(y1 - _render.originY);
+        x2 = (int16_t)(x2 - _render.originX);
+        y2 = (int16_t)(y2 - _render.originY);
+
         auto spr = getDrawTarget();
         if (!spr)
             return;
@@ -585,6 +605,13 @@ namespace pipgui
         }
         if (!_flags.spriteEnabled)
             return;
+
+        x0 = (int16_t)(x0 - _render.originX);
+        y0 = (int16_t)(y0 - _render.originY);
+        x1 = (int16_t)(x1 - _render.originX);
+        y1 = (int16_t)(y1 - _render.originY);
+        x2 = (int16_t)(x2 - _render.originX);
+        y2 = (int16_t)(y2 - _render.originY);
 
         auto spr = getDrawTarget();
         if (!spr)
@@ -710,6 +737,9 @@ namespace pipgui
         if (!_flags.spriteEnabled || w <= 0 || h <= 0)
             return;
 
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         auto spr = getDrawTarget();
         Surface565 s;
         if (!getSurface565(spr, s))
@@ -798,6 +828,9 @@ namespace pipgui
     {
         if (!_flags.spriteEnabled || w <= 0 || h <= 0)
             return;
+
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
 
         auto spr = getDrawTarget();
         Surface565 s;

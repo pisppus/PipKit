@@ -54,13 +54,23 @@ void updateGlowDemoFrame(uint32_t nowMs)
 
 void updateBlurDemoFrame(uint32_t nowMs)
 {
-  if (nowMs - g_blurLastUpdateMs < 1)
+  if (nowMs - g_blurLastUpdateMs < kFrameStepMs)
     return;
 
   g_blurLastUpdateMs = nowMs;
   g_blurPhase += 0.10f;
   if (g_blurPhase > 1000.0f)
     g_blurPhase -= 1000.0f;
+
+  // In tiled mode the sprite buffer is only a screen slice (e.g. 2 tiles).
+  // Incremental updates from the main loop would otherwise only affect the
+  // currently-addressed tile and can cause partial updates and flicker.
+  // Use the screen callback full redraw path instead.
+  if (ui.tiledMode())
+  {
+    ui.requestRedraw();
+    return;
+  }
 
   const uint16_t bg565 = ui.rgb(10, 10, 10);
   const int16_t w = (int16_t)ui.screenWidth();
@@ -291,7 +301,7 @@ void updateSettingsDemoFrame(uint32_t nowMs, bool buttonPressed, bool buttonDown
       .down(!settingsAwaitRelease && buttonDown);
 }
 
-void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown, bool prevPressed, bool prevDown)
+void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown, bool prevPressed, bool prevDown, bool selectDown)
 {
   (void)nextPressed;
   static bool rollbackOpenPending = false;
@@ -323,7 +333,7 @@ void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown,
 
   if (ui.popupMenuActive())
   {
-    ui.popupMenuInput().nextDown(nextDown).prevDown(prevDown);
+    // input handled by ui.loopWithInput(...) / ui.loopWithPolledInput()
   }
   else
   {
@@ -345,7 +355,7 @@ void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown,
 #if PIPGUI_OTA
         ui.otaCancel();
 #endif
-        ui.prevScreen();
+        ui.backScreen();
         return;
       }
     }
@@ -468,9 +478,6 @@ void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown,
   const uint32_t valFg = ui.rgb(220, 220, 220);
   const uint32_t valFgDim = ui.rgb(180, 180, 180);
 
-  static const char *kClearWide =
-      "                                                                                                    ";
-
   auto clampText = [](const String &s, size_t maxChars) -> String {
     if (s.length() <= maxChars)
       return s;
@@ -480,11 +487,8 @@ void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown,
   };
 
   ui.setTextStyle(Body);
-  ui.updateText().text(kClearWide).pos(valX, l.rowY0).color(cardBg).bgColor(cardBg);
   ui.updateText().text(clampText(String(PIPGUI_FIRMWARE_TITLE) + " " + fwVersionText(), 40)).pos(valX, l.rowY0).color((uint16_t)valFg).bgColor(cardBg);
-  ui.updateText().text(kClearWide).pos(valX, l.rowY1).color(cardBg).bgColor(cardBg);
   ui.updateText().text(clampText(wifiText, 40)).pos(valX, l.rowY1).color((uint16_t)valFg).bgColor(cardBg);
-  ui.updateText().text(kClearWide).pos(valX, l.rowY2).color(cardBg).bgColor(cardBg);
   ui.updateText().text(clampText(updateText, 44)).pos(valX, l.rowY2).color((uint16_t)valFgDim).bgColor(cardBg);
 
   ui.setTextStyle(Caption);
@@ -498,9 +502,7 @@ void updateFirmwareUpdateScreen(uint32_t nowMs, bool nextPressed, bool nextDown,
   }
 
   const int16_t notesX = l.cardX + 10;
-  ui.updateText().text(kClearWide).pos(notesX, l.notesTextY).color(cardBg).bgColor(cardBg);
-  if (notesText.length() > 0)
-    ui.updateText().text(clampText(notesText, 56)).pos(notesX, l.notesTextY).color(ui.rgb(200, 200, 200)).bgColor(cardBg);
+  ui.updateText().text(notesText.length() > 0 ? clampText(notesText, 56) : String()).pos(notesX, l.notesTextY).color(ui.rgb(200, 200, 200)).bgColor(cardBg);
 
   uint8_t p = 0;
   if (st.total > 0)
@@ -537,7 +539,7 @@ void updateToggleDemo(bool nextPressed, bool prevPressed)
   bool changed = false;
 
   if (prevPressed)
-    ui.prevScreen();
+    ui.backScreen();
 
   const uint32_t nowMs = millis();
   const bool toggleEnabled = (g_toggleLockedUntil == 0 || nowMs >= g_toggleLockedUntil);
@@ -629,7 +631,7 @@ void updateButtonsDemo(uint32_t nowMs, bool nextPressed, bool nextDown, bool pre
     else if ((nowMs - comboHoldStartMs) >= 450U)
     {
       comboHoldStartMs = 0;
-      ui.prevScreen();
+      ui.backScreen();
       return;
     }
   }
@@ -678,9 +680,7 @@ void updateButtonsDemo(uint32_t nowMs, bool nextPressed, bool nextDown, bool pre
   const int16_t sw = static_cast<int16_t>(ui.screenWidth());
 
   ui.setTextStyle(Caption);
-  ui.updateText().text("                              ").pos(24, 76).color(bg565).bgColor(bg565);
   ui.updateText().text(String("Style: ") + style.name).pos(24, 76).color(line565).bgColor(bg565);
-  ui.updateText().text("                              ").pos(138, 76).color(bg565).bgColor(bg565);
   ui.updateText().text(String("Size: ") + String((unsigned)(g_buttonsDemoSize + 1))).pos(138, 76).color(line565).bgColor(bg565);
 
   ui.updateButton()
@@ -759,7 +759,7 @@ void updateSliderDemo(uint32_t nowMs, bool comboDown)
     else if ((nowMs - comboHoldStartMs) >= 450U)
     {
       comboHoldStartMs = 0;
-      ui.prevScreen();
+      ui.backScreen();
       return;
     }
   }
@@ -842,7 +842,7 @@ void updateAnimatedIconsDemo(uint32_t nowMs, bool comboDown)
     else if ((nowMs - comboHoldStartMs) >= 450U)
     {
       comboHoldStartMs = 0;
-      ui.prevScreen();
+      ui.backScreen();
       return;
     }
   }
@@ -911,7 +911,7 @@ void handleErrorDemo(uint8_t screenId, bool nextPressed, bool prevPressed)
 
   if (prevPressed)
   {
-    ui.prevScreen();
+    ui.backScreen();
     return;
   }
 
@@ -931,7 +931,7 @@ void handleErrorDemo(uint8_t screenId, bool nextPressed, bool prevPressed)
   ui.showError().message("Battery is below 15%").code("0xLOWBAT").type(Warning).button("OK");
 }
 
-void updatePopupMenuDemo(bool nextPressed, bool nextDown, bool prevPressed, bool prevDown)
+void updatePopupMenuDemo(bool nextPressed, bool nextDown, bool prevPressed, bool prevDown, bool selectDown)
 {
   const int16_t picked = ui.popupMenuTakeResult();
   if (picked >= 0 && picked < kPopupMenuDemoItemCount)
@@ -951,15 +951,12 @@ void updatePopupMenuDemo(bool nextPressed, bool nextDown, bool prevPressed, bool
 
   if (ui.popupMenuActive())
   {
-    ui.popupMenuInput()
-        .nextDown(nextDown)
-        .prevDown(prevDown);
     return;
   }
 
   if (prevPressed)
   {
-    ui.prevScreen();
+    ui.backScreen();
     return;
   }
 

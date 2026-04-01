@@ -184,13 +184,13 @@ namespace pipgui
             int32_t clipY = 0;
             int32_t clipW = 0;
             int32_t clipH = 0;
-            sprite->getClipRect(&clipX, &clipY, &clipW, &clipH);
-            applyClip(x, y, w, h);
-            sprite->setClipRect(x, y, w, h);
-            drawFn();
-            _clip = prevGuiClip;
-            sprite->setClipRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
-        };
+             sprite->getClipRect(&clipX, &clipY, &clipW, &clipH);
+             applyClip(x, y, w, h);
+             sprite->setClipRect((int16_t)(x - _render.originX), (int16_t)(y - _render.originY), w, h);
+             drawFn();
+             _clip = prevGuiClip;
+             sprite->setClipRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
+         };
 
         auto measureLine = [&](const String &text, uint16_t px, uint16_t weight, int16_t &width, int16_t &height)
         {
@@ -531,12 +531,6 @@ namespace pipgui
             const String label = currentEntry.buttonText.length() ? currentEntry.buttonText : String("OK");
             drawButton(label, layout.buttonX, buttonY, layout.buttonW, layout.buttonH,
                        theme.accent565, layout.buttonRadius, static_cast<IconId>(0xFFFF), _error.buttonState);
-        }
-
-        if (_flags.spriteEnabled && _disp.display)
-        {
-            invalidateRect(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-            flushDirty();
         }
 
         static_cast<void>(setFont(prevFont));

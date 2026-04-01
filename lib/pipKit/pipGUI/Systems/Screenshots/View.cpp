@@ -118,7 +118,7 @@ namespace pipgui
             if (clipW <= 0 || clipH <= 0)
                 break;
             applyClip((int16_t)clipX1, (int16_t)clipY1, (int16_t)clipW, (int16_t)clipH);
-            spr->setClipRect((int16_t)clipX1, (int16_t)clipY1, (int16_t)clipW, (int16_t)clipH);
+            spr->setClipRect((int16_t)(clipX1 - _render.originX), (int16_t)(clipY1 - _render.originY), (int16_t)clipW, (int16_t)clipH);
 
             uint16_t *buf = static_cast<uint16_t *>(spr->getBuffer());
             const int16_t bufW = spr->width();
@@ -154,20 +154,30 @@ namespace pipgui
                 const uint16_t fg565 = bgBright ? detail::blend565(bg565, 0x0000, 180) : detail::blend565(bg565, 0xFFFF, 200);
 
 #if (PIPGUI_SCREENSHOT_MODE == 2)
-                const String msg = _shots.flashScanDone ? "No screenshots" : "Loading...";
+                const bool loading = !_shots.flashScanDone;
+                const String msg = loading ? "Loading..." : "No screenshots";
+                const String hint = loading ? String() : "Hold both buttons to capture";
 #else
                 const String msg = "No screenshots";
+                const String hint = "Hold both buttons to capture";
 #endif
+                const int16_t tx = static_cast<int16_t>(x + (int32_t)w / 2);
+                const int16_t midY = static_cast<int16_t>(y + (int32_t)h / 2);
+
                 int16_t mtw = 0, mth = 0;
-                if (measureText(msg, mtw, mth) && mtw > 0 && mth > 0)
+                (void)measureText(msg, mtw, mth);
+
+                int16_t htw = 0, hth = 0;
+                const bool haveHint = (hint.length() > 0) && measureText(hint, htw, hth) && htw > 0 && hth > 0;
+
+                const int16_t msgY = haveHint ? (int16_t)(midY - (mth / 2) - 6) : (int16_t)(midY - (mth / 2));
+                drawTextAligned(msg, tx, msgY, fg565, 0, TextAlign::Center);
+
+                if (haveHint)
                 {
-                    const int16_t tx = static_cast<int16_t>(x + (int32_t)w / 2);
-                    const int16_t ty = static_cast<int16_t>(y + (int32_t)(h - mth) / 2);
-                    drawTextAligned(msg, tx, ty, fg565, 0, TextAlign::Center);
-                }
-                else
-                {
-                    drawTextAligned(msg, static_cast<int16_t>(x + (int32_t)w / 2), static_cast<int16_t>(y + (int32_t)h / 2), fg565, 0, TextAlign::Center);
+                    const uint16_t hintFg = bgBright ? detail::blend565(bg565, 0x0000, 120) : detail::blend565(bg565, 0xFFFF, 140);
+                    const int16_t hintY = (int16_t)(msgY + mth + 10);
+                    drawTextAligned(hint, tx, hintY, hintFg, 0, TextAlign::Center);
                 }
                 break;
             }

@@ -174,6 +174,10 @@ namespace pipgui
     {
         if (w <= 0 || h <= 0)
             return;
+        if (x == -1)
+            x = AutoX(w);
+        if (y == -1)
+            y = AutoY(h);
         if (radius < 1)
             radius = 1;
         _blur.lastUseMs = nowMs();
@@ -187,6 +191,11 @@ namespace pipgui
         pipcore::Sprite *spr = getDrawTarget();
         if (!spr)
             return;
+
+        // Sprite-space coordinates (tiled-mode uses origin offsets).
+        x = (int16_t)(x - _render.originX);
+        y = (int16_t)(y - _render.originY);
+
         int32_t clipX = 0;
         int32_t clipY = 0;
         int32_t clipW = spr->width();

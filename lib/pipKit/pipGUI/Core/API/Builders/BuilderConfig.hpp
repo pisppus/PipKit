@@ -378,9 +378,11 @@ namespace pipgui
         PIPGUI_DEFAULT_FLUENT_MOVE(ListInputFluent);
         bool _nextDown;
         bool _prevDown;
+        bool _selectDown;
+        bool _hasSelect;
 
         ListInputFluent(GUI *g)
-            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false)
+            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false), _selectDown(false), _hasSelect(false)
         {
         }
 
@@ -400,6 +402,15 @@ namespace pipgui
             return *this;
         }
 
+        ListInputFluent &selectDown(bool v)
+        {
+            if (!canMutate())
+                return *this;
+            _selectDown = v;
+            _hasSelect = true;
+            return *this;
+        }
+
         ~ListInputFluent() { apply(); }
 
     private:
@@ -411,9 +422,11 @@ namespace pipgui
         PIPGUI_DEFAULT_FLUENT_MOVE(PopupMenuInputFluent);
         bool _nextDown;
         bool _prevDown;
+        bool _selectDown;
+        bool _hasSelect;
 
         PopupMenuInputFluent(GUI *g)
-            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false)
+            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false), _selectDown(false), _hasSelect(false)
         {
         }
 
@@ -430,6 +443,15 @@ namespace pipgui
             if (!canMutate())
                 return *this;
             _prevDown = v;
+            return *this;
+        }
+
+        PopupMenuInputFluent &selectDown(bool v)
+        {
+            if (!canMutate())
+                return *this;
+            _selectDown = v;
+            _hasSelect = true;
             return *this;
         }
 
@@ -593,9 +615,11 @@ namespace pipgui
         PIPGUI_DEFAULT_FLUENT_MOVE(TileInputFluent);
         bool _nextDown;
         bool _prevDown;
+        bool _selectDown;
+        bool _hasSelect;
 
         TileInputFluent(GUI *g)
-            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false)
+            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false), _selectDown(false), _hasSelect(false)
         {
         }
 
@@ -612,6 +636,15 @@ namespace pipgui
             if (!canMutate())
                 return *this;
             _prevDown = v;
+            return *this;
+        }
+
+        TileInputFluent &selectDown(bool v)
+        {
+            if (!canMutate())
+                return *this;
+            _selectDown = v;
+            _hasSelect = true;
             return *this;
         }
 

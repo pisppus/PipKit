@@ -18,6 +18,11 @@ namespace pipgui
         uint16_t *innerCache = nullptr;
         int16_t innerCacheW = 0;
         int16_t innerCacheH = 0;
+        uint16_t *renderCache = nullptr;
+        int16_t renderCacheW = 0;
+        int16_t renderCacheH = 0;
+        bool renderCacheValid = false;
+        uint8_t renderCacheTileMask = 0;
 
         uint32_t bgColor = 0;
         uint16_t bgColor565 = 0;
@@ -37,6 +42,8 @@ namespace pipgui
         bool pendingRender = false;
         bool autoScaleEnabled = false;
         bool autoScaleInitialized = false;
+        bool paused = false;
+        bool pauseToggled = false;
         int16_t autoMin = 0;
         int16_t autoMax = 0;
         uint32_t lastPeakMs = 0;
@@ -117,6 +124,7 @@ namespace pipgui
         bool prevLongFired = false;
         bool lastNextDown = false;
         bool lastPrevDown = false;
+        bool lastSelectDown = false;
 
         ListStyle style;
 
@@ -164,6 +172,7 @@ namespace pipgui
         bool prevLongFired = false;
         bool lastNextDown = false;
         bool lastPrevDown = false;
+        bool lastSelectDown = false;
         uint32_t marqueeStartMs = 0;
 
         TileStyle style;

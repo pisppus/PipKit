@@ -178,6 +178,8 @@ namespace pipgui
 
         const int16_t baseW = (int16_t)std::min<int32_t>(_render.screenWidth, spr->width());
         const int16_t baseH = (int16_t)std::min<int32_t>(_render.screenHeight, spr->height());
+        const int16_t originX = _render.originX;
+        const int16_t originY = _render.originY;
 
         if (!_clip.enabled)
         {
@@ -185,10 +187,10 @@ namespace pipgui
             return spr;
         }
 
-        const int32_t clipX1 = std::max<int32_t>(0, _clip.x);
-        const int32_t clipY1 = std::max<int32_t>(0, _clip.y);
-        const int32_t clipX2 = std::min<int32_t>(baseW, static_cast<int32_t>(_clip.x) + _clip.w);
-        const int32_t clipY2 = std::min<int32_t>(baseH, static_cast<int32_t>(_clip.y) + _clip.h);
+        const int32_t clipX1 = std::max<int32_t>(0, static_cast<int32_t>(_clip.x) - originX);
+        const int32_t clipY1 = std::max<int32_t>(0, static_cast<int32_t>(_clip.y) - originY);
+        const int32_t clipX2 = std::min<int32_t>(baseW, (static_cast<int32_t>(_clip.x) + _clip.w) - originX);
+        const int32_t clipY2 = std::min<int32_t>(baseH, (static_cast<int32_t>(_clip.y) + _clip.h) - originY);
         const int16_t clipW = (int16_t)std::max<int32_t>(0, clipX2 - clipX1);
         const int16_t clipH = (int16_t)std::max<int32_t>(0, clipY2 - clipY1);
         applyClipState(spr, true, (int16_t)clipX1, (int16_t)clipY1, clipW, clipH);
@@ -337,6 +339,8 @@ namespace pipgui
     {
         if (_dirty.count == 0)
             return;
+        if (_flags.tiledMode)
+            return;
         if (_flags.screenTransition || _rotationAnim.active || _flags.errorActive || _flags.notifActive || _flags.toastActive)
         {
             _flags.needRedraw = 1;
@@ -395,6 +399,56 @@ namespace pipgui
             return w > 0 && h > 0;
         };
 
+        // Many small dirty presents can look like flicker/tearing on SPI panels.
+        // When it's not a debug session, prefer a single bounding present if it
+        // doesn't explode the updated area too much.
+        bool useBoundingPresent = false;
+        int16_t bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
+        int32_t sumArea = 0;
+        uint8_t clippedCount = 0;
+        if (_dirty.count > 1)
+        {
+            bool first = true;
+            for (uint8_t i = 0; i < _dirty.count; ++i)
+            {
+                int16_t x0 = 0, y0 = 0, w = 0, h = 0;
+                if (!clipRect(_dirty.rects[i], x0, y0, w, h))
+                    continue;
+                ++clippedCount;
+                sumArea += (int32_t)w * (int32_t)h;
+                if (first)
+                {
+                    bx0 = x0;
+                    by0 = y0;
+                    bx1 = (int16_t)(x0 + w);
+                    by1 = (int16_t)(y0 + h);
+                    first = false;
+                }
+                else
+                {
+                    if (x0 < bx0)
+                        bx0 = x0;
+                    if (y0 < by0)
+                        by0 = y0;
+                    const int16_t ex = (int16_t)(x0 + w);
+                    const int16_t ey = (int16_t)(y0 + h);
+                    if (ex > bx1)
+                        bx1 = ex;
+                    if (ey > by1)
+                        by1 = ey;
+                }
+            }
+
+            if (clippedCount > 1)
+            {
+                const int32_t bw = (int32_t)bx1 - (int32_t)bx0;
+                const int32_t bh = (int32_t)by1 - (int32_t)by0;
+                const int32_t boundArea = (bw > 0 && bh > 0) ? (bw * bh) : 0;
+                // Allow up to ~1.6x extra pixels vs. sum of dirty rects.
+                useBoundingPresent = (boundArea > 0) && (boundArea <= (sumArea + (sumArea * 3) / 5));
+            }
+        }
+
         if (debugDirty)
         {
             for (uint8_t i = 0; i < _dirty.count; ++i)
@@ -407,6 +461,27 @@ namespace pipgui
                     continue;
                 Debug::recordDirtyRect(x0, y0, w, h);
             }
+        }
+
+        if (useBoundingPresent)
+        {
+            const int16_t w = (int16_t)(bx1 - bx0);
+            const int16_t h = (int16_t)(by1 - by0);
+            if (debugDirty && buf && sw > 0 && sh > 0)
+            {
+                for (uint8_t i = 0; i < _dirty.count; ++i)
+                {
+                    int16_t x0 = 0, y0 = 0, rw = 0, rh = 0;
+                    if (!clipRect(_dirty.rects[i], x0, y0, rw, rh))
+                        continue;
+                    Debug::drawOverlay(buf, stride, x0, y0, rw, rh);
+                }
+            }
+            if (w > 0 && h > 0)
+                presentSprite(bx0, by0, w, h, "present");
+            _dirty.count = 0;
+            Debug::clearRects();
+            return;
         }
 
         for (uint8_t i = 0; i < _dirty.count; ++i)

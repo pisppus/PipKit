@@ -101,6 +101,8 @@ namespace pipgui::detail
         uint16_t physicalHeight = 0;
         uint16_t screenWidth = 0;
         uint16_t screenHeight = 0;
+        int16_t originX = 0;
+        int16_t originY = 0;
         uint32_t bgColor = 0;
         uint16_t bgColor565 = 0;
     };
@@ -353,6 +355,7 @@ namespace pipgui::detail
     struct Flags
     {
         unsigned spriteEnabled : 1;
+        unsigned tiledMode : 1;
         unsigned inSpritePass : 1;
         unsigned needRedraw : 1;
         unsigned dirtyRedrawPending : 1;

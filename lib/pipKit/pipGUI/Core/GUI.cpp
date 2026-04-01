@@ -291,13 +291,16 @@ namespace pipgui
         return best->state;
     }
 
-    GUI::InputState GUI::pollInput(Button &next, Button &prev)
+    GUI::InputState GUI::pollInputInternal(Button &next, Button &prev, Button *select)
     {
         next.update();
         prev.update();
+        if (select)
+            select->update();
 
         const bool nextDown = next.isDown();
         const bool prevDown = prev.isDown();
+        const bool selectDown = select ? select->isDown() : false;
         const bool combo = nextDown && prevDown;
 
 #if PIPGUI_SCREENSHOTS
@@ -306,7 +309,13 @@ namespace pipgui
         {
             (void)next.wasPressed();
             (void)prev.wasPressed();
-            return {};
+            if (select)
+                (void)select->wasPressed();
+            InputState out;
+            out.comboDown = true;
+            out.hasSelect = (select != nullptr);
+            _input = out;
+            return out;
         }
 #endif
 
@@ -315,10 +324,70 @@ namespace pipgui
         out.prevDown = prevDown;
         out.nextPressed = next.wasPressed();
         out.prevPressed = prev.wasPressed();
+        out.selectDown = selectDown;
+        out.selectPressed = select ? select->wasPressed() : false;
         out.comboDown = combo;
+        out.hasSelect = (select != nullptr);
         _input = out;
+
+        if (out.hasSelect && out.selectPressed &&
+            !_flags.errorActive && !_flags.notifActive && !_flags.popupActive && !_flags.screenTransition &&
+            _screen.current < _screen.capacity && _screen.graphAreas && _screen.graphAreas[_screen.current])
+        {
+            GraphArea *area = _screen.graphAreas[_screen.current];
+            if (area && area->innerW > 1 && area->innerH > 1)
+                setGraphPaused(!graphPaused());
+        }
+
         return out;
     }
+
+    GUI::InputState GUI::pollInput(Button &next, Button &prev)
+    {
+        _manualInputMask = 0;
+        return pollInputInternal(next, prev, nullptr);
+    }
+
+    GUI::InputState GUI::pollInput(Button &next, Button &prev, Button &select)
+    {
+        _manualInputMask = 0;
+        return pollInputInternal(next, prev, &select);
+    }
+
+    bool GUI::graphPaused() const noexcept
+    {
+        if (_screen.current >= _screen.capacity || !_screen.graphAreas)
+            return false;
+        const GraphArea *area = _screen.graphAreas[_screen.current];
+        return area ? area->paused : false;
+    }
+
+    void GUI::setGraphPaused(bool paused) noexcept
+    {
+        if (_screen.current >= _screen.capacity || !_screen.graphAreas)
+            return;
+        GraphArea *area = _screen.graphAreas[_screen.current];
+        if (!area)
+            return;
+        if (area->paused == paused)
+            return;
+        area->paused = paused;
+        area->pauseToggled = true;
+        requestRedraw();
+    }
+
+    bool GUI::GraphPauseToggled() noexcept
+    {
+        if (_screen.current >= _screen.capacity || !_screen.graphAreas)
+            return false;
+        GraphArea *area = _screen.graphAreas[_screen.current];
+        if (!area)
+            return false;
+        const bool v = area->pauseToggled;
+        area->pauseToggled = false;
+        return v;
+    }
+
 
     static void backlightPlatformCallback(uint16_t level)
     {
@@ -636,10 +705,16 @@ namespace pipgui
         _consumed = true;
         if (!_gui)
             return;
+        _gui->_manualInputMask |= GUI::ManualInput_List;
         const uint8_t screenId = _gui->currentScreen();
         if (screenId == INVALID_SCREEN_ID)
             return;
-        detail::GuiAccess::handleListInput(*_gui, screenId, _nextDown, _prevDown);
+        GUI::InputState input;
+        input.nextDown = _nextDown;
+        input.prevDown = _prevDown;
+        input.selectDown = _selectDown;
+        input.hasSelect = _hasSelect;
+        detail::GuiAccess::handleListInput(*_gui, screenId, input);
     }
 
     void PopupMenuInputFluent::apply()
@@ -649,7 +724,13 @@ namespace pipgui
         _consumed = true;
         if (!_gui)
             return;
-        detail::GuiAccess::handlePopupMenuInput(*_gui, _nextDown, _prevDown);
+        _gui->_manualInputMask |= GUI::ManualInput_Popup;
+        GUI::InputState input;
+        input.nextDown = _nextDown;
+        input.prevDown = _prevDown;
+        input.selectDown = _selectDown;
+        input.hasSelect = _hasSelect;
+        detail::GuiAccess::handlePopupMenuInput(*_gui, input);
     }
 
     void ConfigStatusBarFluent::apply()
@@ -673,7 +754,7 @@ namespace pipgui
         detail::GuiAccess::setStatusBarIcon(*_gui, _side, _iconId, detail::optionalColor32(_color565), _sizePx);
     }
 
-    void GUI::begin(uint8_t rotation)
+    void GUI::begin(uint8_t rotation, bool forceTiles)
     {
         pipcore::Platform *plat = pipcore::GetPlatform();
         if (!plat)
@@ -693,7 +774,7 @@ namespace pipgui
 #if PIPGUI_DEBUG_METRICS
         _flags.statusBarDebugMetrics = true;
         Debug::init();
-        _status.dirtyMask = StatusBarDirtyAll;
+        _status.dirtyMask = detail::StatusBarDirtyAll;
 #endif
 
         if (_disp.cfgConfigured)
@@ -725,20 +806,46 @@ namespace pipgui
         _render.screenHeight = _render.physicalHeight;
         _render.bgColor = bgColor;
         _render.bgColor565 = bgColor;
+        _render.originX = 0;
+        _render.originY = 0;
 
         _render.sprite.setPlatform(plat);
 
-        _flags.spriteEnabled = _render.sprite.createSprite((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
+        _render.sprite.deleteSprite();
+        _flags.tiledMode = 0;
+
+        const int16_t sw = (int16_t)_render.screenWidth;
+        const int16_t sh = (int16_t)_render.screenHeight;
+        bool ok = false;
+        if (!forceTiles)
+            ok = _render.sprite.createSprite(sw, sh);
+
+        if (!ok)
+        {
+            const int16_t tileH = (sh > 1) ? (int16_t)((sh + 1) / 2) : sh;
+            _render.sprite.deleteSprite();
+            ok = _render.sprite.createSprite(sw, tileH);
+            _flags.tiledMode = ok ? 1U : 0U;
+        }
+
+        _flags.spriteEnabled = ok ? 1U : 0U;
         _render.activeSprite = _flags.spriteEnabled ? &_render.sprite : nullptr;
 
         if (_flags.spriteEnabled)
         {
-            const bool prevRender = _flags.inSpritePass;
-            _flags.inSpritePass = 1;
-            clear(bgColor);
-            _flags.inSpritePass = prevRender;
-            invalidateRect(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-            flushDirty();
+            if (!_flags.tiledMode)
+            {
+                const bool prevRender = _flags.inSpritePass;
+                _flags.inSpritePass = 1;
+                clear(bgColor);
+                _flags.inSpritePass = prevRender;
+                invalidateRect(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
+                flushDirty();
+            }
+            else if (_disp.display)
+            {
+                _disp.display->fillScreen565(bgColor);
+            }
         }
 
         syncRegisteredScreens();

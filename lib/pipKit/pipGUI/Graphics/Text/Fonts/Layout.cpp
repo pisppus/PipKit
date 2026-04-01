@@ -53,8 +53,8 @@ namespace pipgui
         int32_t prevClipX = 0, prevClipY = 0, prevClipW = 0, prevClipH = 0;
         target->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
 
-        int32_t clipX = boxX;
-        int32_t clipY = boxY;
+        int32_t clipX = (int32_t)boxX - _render.originX;
+        int32_t clipY = (int32_t)boxY - _render.originY;
         int32_t clipW = maxWidth;
         int32_t clipH = th;
 

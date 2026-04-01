@@ -243,6 +243,10 @@ namespace pipgui
         if (!_typo.psdfSizePx || !font)
             return;
 
+        rx = (int16_t)(rx - _render.originX);
+        ry = (int16_t)(ry - _render.originY);
+        fadeBoxX = (int16_t)(fadeBoxX - _render.originX);
+
         pipcore::Sprite *spr = getDrawTarget();
         if (!spr)
             return;
@@ -487,10 +491,80 @@ namespace pipgui
         if (!_typo.psdfSizePx || !font)
             return;
 
+        const uint32_t now = nowMs();
+        detail::TextCacheEntry &cacheEntry = resolveTextCacheEntry(
+            _textCache,
+            hashTextUpdateKey(x, y, align, _typo.currentFontId, _typo.psdfSizePx, _typo.psdfWeight),
+            now);
+
+        if (text.length() == 0)
+        {
+            if (cacheEntry.rect.w <= 0 || cacheEntry.rect.h <= 0)
+            {
+                cacheEntry.rect = {};
+                return;
+            }
+
+            const int16_t clearX = cacheEntry.rect.x;
+            const int16_t clearY = cacheEntry.rect.y;
+            const int16_t clearW = cacheEntry.rect.w;
+            const int16_t clearH = cacheEntry.rect.h;
+
+            if (_flags.tiledMode && !_flags.inSpritePass)
+            {
+                tiledRenderAndPresentRect(clearX, clearY, clearW, clearH, "tiled-clear-text", [&]()
+                                          { drawRect().pos(clearX, clearY).size(clearW, clearH).fill(bg565).draw(); });
+                cacheEntry.rect = {};
+                return;
+            }
+
+            const bool prevRender = _flags.inSpritePass;
+            pipcore::Sprite *prevActive = _render.activeSprite;
+            _flags.inSpritePass = 1;
+            _render.activeSprite = &_render.sprite;
+            drawRect().pos(clearX, clearY).size(clearW, clearH).fill(bg565).draw();
+            _flags.inSpritePass = prevRender;
+            _render.activeSprite = prevActive;
+
+            if (!prevRender)
+                invalidateRect(clearX, clearY, clearW, clearH);
+
+            cacheEntry.rect = {};
+            return;
+        }
+
         TextLayoutBox box;
         if (!computeTextLayoutBox(text.c_str(), (int)text.length(), font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
             box.width <= 0 || box.height <= 0)
+        {
+            if (cacheEntry.rect.w > 0 && cacheEntry.rect.h > 0)
+            {
+                const int16_t clearX = cacheEntry.rect.x;
+                const int16_t clearY = cacheEntry.rect.y;
+                const int16_t clearW = cacheEntry.rect.w;
+                const int16_t clearH = cacheEntry.rect.h;
+
+                if (_flags.tiledMode && !_flags.inSpritePass)
+                {
+                    tiledRenderAndPresentRect(clearX, clearY, clearW, clearH, "tiled-clear-text", [&]()
+                                              { drawRect().pos(clearX, clearY).size(clearW, clearH).fill(bg565).draw(); });
+                }
+                else
+                {
+                    const bool prevRender = _flags.inSpritePass;
+                    pipcore::Sprite *prevActive = _render.activeSprite;
+                    _flags.inSpritePass = 1;
+                    _render.activeSprite = &_render.sprite;
+                    drawRect().pos(clearX, clearY).size(clearW, clearH).fill(bg565).draw();
+                    _flags.inSpritePass = prevRender;
+                    _render.activeSprite = prevActive;
+                    if (!prevRender)
+                        invalidateRect(clearX, clearY, clearW, clearH);
+                }
+            }
+            cacheEntry.rect = {};
             return;
+        }
         const int16_t tw = box.width;
         const int16_t th = box.height;
 
@@ -512,11 +586,6 @@ namespace pipgui
         const int16_t newY = (int16_t)(drawY0 - pad);
         const int16_t newW = (int16_t)(drawX1 - drawX0 + pad * 2);
         const int16_t newH = (int16_t)(drawY1 - drawY0 + pad * 2);
-        const uint32_t now = nowMs();
-        detail::TextCacheEntry &cacheEntry = resolveTextCacheEntry(
-            _textCache,
-            hashTextUpdateKey(x, y, align, _typo.currentFontId, _typo.psdfSizePx, _typo.psdfWeight),
-            now);
 
         int16_t clearX = newX;
         int16_t clearY = newY;
@@ -532,6 +601,20 @@ namespace pipgui
             clearY = minY;
             clearW = maxX - minX;
             clearH = maxY - minY;
+        }
+
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect(clearX, clearY, clearW, clearH, "tiled-update-text", [&]()
+                                      {
+                                          drawRect().pos(clearX, clearY).size(clearW, clearH).fill(bg565).draw();
+                                          drawTextImmediate(text,
+                                                            (int16_t)(rx + box.originX),
+                                                            (int16_t)(ry + box.originY),
+                                                            tw, th, fg565, bg565, align);
+                                      });
+            cacheEntry.rect = {newX, newY, newW, newH};
+            return;
         }
 
         bool prevRender = _flags.inSpritePass;

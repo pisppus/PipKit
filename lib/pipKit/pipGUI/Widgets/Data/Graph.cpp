@@ -74,6 +74,8 @@ namespace pipgui
                 detail::free(plat, area.renderHead);
             if (area.innerCache)
                 detail::free(plat, area.innerCache);
+            if (area.renderCache)
+                detail::free(plat, area.renderCache);
 
             area.samples = nullptr;
             area.lineColors565 = nullptr;
@@ -87,6 +89,11 @@ namespace pipgui
             area.innerCache = nullptr;
             area.innerCacheW = 0;
             area.innerCacheH = 0;
+            area.renderCache = nullptr;
+            area.renderCacheW = 0;
+            area.renderCacheH = 0;
+            area.renderCacheValid = false;
+            area.renderCacheTileMask = 0;
             area.lineCount = 0;
             area.sampleCapacity = 0;
             area.renderSnapshotValid = false;
@@ -106,6 +113,8 @@ namespace pipgui
             area.gridCellsY = 0;
             area.frameUsed = false;
             area.pendingRender = false;
+            area.paused = false;
+            area.pauseToggled = false;
         }
 
         static bool ensureGraphLineStorage(GraphArea &area, uint16_t lineIndex)
@@ -342,6 +351,167 @@ namespace pipgui
             return true;
         }
 
+        static bool ensureGraphRenderCache(GraphArea &area)
+        {
+            if (area.innerW <= 0 || area.innerH <= 0)
+                return false;
+            if (area.renderCache && area.renderCacheW == area.innerW && area.renderCacheH == area.innerH)
+                return true;
+
+            pipcore::Platform *plat = graphPlatform();
+            if (!plat)
+                return false;
+
+            if (area.renderCache)
+            {
+                detail::free(plat, area.renderCache);
+                area.renderCache = nullptr;
+                area.renderCacheW = 0;
+                area.renderCacheH = 0;
+                area.renderCacheValid = false;
+                area.renderCacheTileMask = 0;
+            }
+
+            const size_t pixels = static_cast<size_t>(area.innerW) * static_cast<size_t>(area.innerH);
+            area.renderCache = (uint16_t *)detail::alloc(plat, pixels * sizeof(uint16_t), pipcore::AllocCaps::Default);
+            if (!area.renderCache)
+                return false;
+
+            area.renderCacheW = area.innerW;
+            area.renderCacheH = area.innerH;
+            area.renderCacheValid = false;
+            area.renderCacheTileMask = 0;
+            return true;
+        }
+
+        static void snapshotGraphRenderCache(pipcore::Sprite *t, GraphArea &area, int16_t originX, int16_t originY, int16_t screenH) noexcept
+        {
+            if (!t || area.innerW <= 0 || area.innerH <= 0 || screenH <= 0)
+                return;
+            if (!ensureGraphRenderCache(area) || !area.renderCache)
+                return;
+
+            uint16_t *buf = static_cast<uint16_t *>(t->getBuffer());
+            const int32_t stride = t->width();
+            const int16_t tileW = t->width();
+            const int16_t tileH = t->height();
+            if (!buf || stride <= 0 || tileW <= 0 || tileH <= 0)
+                return;
+
+            const bool tiled = (screenH > tileH);
+            const uint8_t tileBit = tiled ? ((originY >= tileH) ? 0x2 : 0x1) : 0x1;
+
+            uint8_t requiredMask = 0x1;
+            if (tiled)
+            {
+                requiredMask = 0;
+                const int32_t iy1 = area.innerY;
+                const int32_t iy2 = (int32_t)area.innerY + area.innerH;
+                if (iy1 < tileH && iy2 > 0)
+                    requiredMask |= 0x1;
+                if (iy1 < screenH && iy2 > tileH)
+                    requiredMask |= 0x2;
+                if (requiredMask == 0)
+                    requiredMask = 0x1;
+            }
+
+            const int32_t tileX1 = originX;
+            const int32_t tileY1 = originY;
+            const int32_t tileX2 = (int32_t)originX + tileW;
+            const int32_t tileY2 = (int32_t)originY + tileH;
+
+            const int32_t innerX1 = area.innerX;
+            const int32_t innerY1 = area.innerY;
+            const int32_t innerX2 = (int32_t)area.innerX + area.innerW;
+            const int32_t innerY2 = (int32_t)area.innerY + area.innerH;
+
+            const int32_t ix1 = std::max<int32_t>(innerX1, tileX1);
+            const int32_t iy1 = std::max<int32_t>(innerY1, tileY1);
+            const int32_t ix2 = std::min<int32_t>(innerX2, tileX2);
+            const int32_t iy2 = std::min<int32_t>(innerY2, tileY2);
+
+            if (ix2 <= ix1 || iy2 <= iy1)
+            {
+                if ((requiredMask & tileBit) == 0)
+                    area.renderCacheTileMask |= tileBit;
+                area.renderCacheValid = ((area.renderCacheTileMask & requiredMask) == requiredMask);
+                return;
+            }
+
+            const int16_t copyW = (int16_t)(ix2 - ix1);
+            const int16_t copyH = (int16_t)(iy2 - iy1);
+            const int32_t srcX = ix1 - tileX1;
+            const int32_t srcY = iy1 - tileY1;
+            const int32_t dstX = ix1 - innerX1;
+            const int32_t dstY = iy1 - innerY1;
+            if (srcX < 0 || srcY < 0 || dstX < 0 || dstY < 0)
+                return;
+
+            const size_t rowBytes = static_cast<size_t>(copyW) * sizeof(uint16_t);
+            for (int16_t row = 0; row < copyH; ++row)
+            {
+                const uint16_t *src = buf + static_cast<size_t>(srcY + row) * stride + srcX;
+                uint16_t *dst = area.renderCache + static_cast<size_t>(dstY + row) * area.innerW + dstX;
+                std::memcpy(dst, src, rowBytes);
+            }
+
+            area.renderCacheTileMask |= tileBit;
+            area.renderCacheValid = ((area.renderCacheTileMask & requiredMask) == requiredMask);
+        }
+
+        static bool blitGraphRenderCache(pipcore::Sprite *t, const GraphArea &area, int16_t originX, int16_t originY) noexcept
+        {
+            if (!t || !area.renderCacheValid || !area.renderCache)
+                return false;
+            if (area.renderCacheW != area.innerW || area.renderCacheH != area.innerH)
+                return false;
+            if (area.innerW <= 0 || area.innerH <= 0)
+                return false;
+
+            uint16_t *buf = static_cast<uint16_t *>(t->getBuffer());
+            const int32_t stride = t->width();
+            const int16_t tileW = t->width();
+            const int16_t tileH = t->height();
+            if (!buf || stride <= 0 || tileW <= 0 || tileH <= 0)
+                return false;
+
+            const int32_t tileX1 = originX;
+            const int32_t tileY1 = originY;
+            const int32_t tileX2 = (int32_t)originX + tileW;
+            const int32_t tileY2 = (int32_t)originY + tileH;
+
+            const int32_t innerX1 = area.innerX;
+            const int32_t innerY1 = area.innerY;
+            const int32_t innerX2 = (int32_t)area.innerX + area.innerW;
+            const int32_t innerY2 = (int32_t)area.innerY + area.innerH;
+
+            const int32_t ix1 = std::max<int32_t>(innerX1, tileX1);
+            const int32_t iy1 = std::max<int32_t>(innerY1, tileY1);
+            const int32_t ix2 = std::min<int32_t>(innerX2, tileX2);
+            const int32_t iy2 = std::min<int32_t>(innerY2, tileY2);
+
+            if (ix2 <= ix1 || iy2 <= iy1)
+                return true;
+
+            const int16_t copyW = (int16_t)(ix2 - ix1);
+            const int16_t copyH = (int16_t)(iy2 - iy1);
+            const int32_t dstX = ix1 - tileX1;
+            const int32_t dstY = iy1 - tileY1;
+            const int32_t srcX = ix1 - innerX1;
+            const int32_t srcY = iy1 - innerY1;
+            if (dstX < 0 || dstY < 0 || srcX < 0 || srcY < 0)
+                return false;
+
+            const size_t rowBytes = static_cast<size_t>(copyW) * sizeof(uint16_t);
+            for (int16_t row = 0; row < copyH; ++row)
+            {
+                uint16_t *dst = buf + static_cast<size_t>(dstY + row) * stride + dstX;
+                const uint16_t *src = area.renderCache + static_cast<size_t>(srcY + row) * area.innerW + srcX;
+                std::memcpy(dst, src, rowBytes);
+            }
+            return true;
+        }
+
         static void buildGraphInnerCache(GraphArea &area)
         {
             if (!ensureGraphInnerCache(area) || !area.innerCache)
@@ -440,7 +610,7 @@ namespace pipgui
             return hasActiveLine;
         }
 
-        static bool shiftGraphInnerOnePixel(pipcore::Sprite *t, const GraphArea &area)
+        static bool shiftGraphInnerOnePixel(pipcore::Sprite *t, const GraphArea &area, int16_t originX, int16_t originY)
         {
             if (!t || !area.innerCache || area.innerW < 2 || area.innerH < 1)
                 return false;
@@ -451,6 +621,9 @@ namespace pipgui
             if (!buf || stride <= 0 || height <= 0)
                 return false;
 
+            const int16_t innerXS = (int16_t)(area.innerX - originX);
+            const int16_t innerYS = (int16_t)(area.innerY - originY);
+
             int32_t clipX = 0;
             int32_t clipY = 0;
             int32_t clipW = stride;
@@ -458,15 +631,15 @@ namespace pipgui
             t->getClipRect(&clipX, &clipY, &clipW, &clipH);
             const int32_t clipR = clipX + clipW - 1;
             const int32_t clipB = clipY + clipH - 1;
-            if (area.innerX < clipX || area.innerY < clipY ||
-                area.innerX + area.innerW - 1 > clipR ||
-                area.innerY + area.innerH - 1 > clipB)
+            if (innerXS < clipX || innerYS < clipY ||
+                innerXS + area.innerW - 1 > clipR ||
+                innerYS + area.innerH - 1 > clipB)
                 return false;
 
             const bool leftToRight = (area.direction == LeftToRight);
             for (int16_t y = 0; y < area.innerH; ++y)
             {
-                uint16_t *row = buf + static_cast<size_t>(area.innerY + y) * stride + area.innerX;
+                uint16_t *row = buf + static_cast<size_t>(innerYS + y) * stride + innerXS;
                 if (leftToRight)
                 {
                     std::memmove(row, row + 1, static_cast<size_t>(area.innerW - 1) * sizeof(uint16_t));
@@ -482,13 +655,13 @@ namespace pipgui
             return true;
         }
 
-        static bool renderBufferedGraphIncremental(GUI &gui, pipcore::Sprite *t, GraphArea &area, bool useAutoScale, int16_t autoMin, int16_t autoMax)
+        static bool renderBufferedGraphIncremental(GUI &gui, pipcore::Sprite *t, GraphArea &area, bool useAutoScale, int16_t autoMin, int16_t autoMax, int16_t originX, int16_t originY)
         {
             (void)useAutoScale;
             (void)autoMin;
             (void)autoMax;
 
-            if (!shiftGraphInnerOnePixel(t, area))
+            if (!shiftGraphInnerOnePixel(t, area, originX, originY))
                 return false;
 
             const bool leftToRight = (area.direction == LeftToRight);
@@ -515,7 +688,7 @@ namespace pipgui
             return true;
         }
 
-        static void redrawGraphInner(pipcore::Sprite *t, const GraphArea &area)
+        static void redrawGraphInner(pipcore::Sprite *t, const GraphArea &area, int16_t originX, int16_t originY)
         {
             if (!t || area.innerW <= 0 || area.innerH <= 0)
                 return;
@@ -523,6 +696,9 @@ namespace pipgui
             GraphArea &mutableArea = const_cast<GraphArea &>(area);
             if (!mutableArea.innerCache || mutableArea.innerCacheW != area.innerW || mutableArea.innerCacheH != area.innerH)
                 buildGraphInnerCache(mutableArea);
+
+            const int16_t innerXS = (int16_t)(area.innerX - originX);
+            const int16_t innerYS = (int16_t)(area.innerY - originY);
 
             if (mutableArea.innerCache)
             {
@@ -538,16 +714,16 @@ namespace pipgui
                     t->getClipRect(&clipX, &clipY, &clipW, &clipH);
                     const int32_t clipR = clipX + clipW - 1;
                     const int32_t clipB = clipY + clipH - 1;
-                    const int16_t copyX = area.innerX < clipX ? static_cast<int16_t>(clipX) : area.innerX;
-                    const int16_t copyY = area.innerY < clipY ? static_cast<int16_t>(clipY) : area.innerY;
-                    const int16_t copyR = (area.innerX + area.innerW - 1 > clipR) ? static_cast<int16_t>(clipR) : static_cast<int16_t>(area.innerX + area.innerW - 1);
-                    const int16_t copyB = (area.innerY + area.innerH - 1 > clipB) ? static_cast<int16_t>(clipB) : static_cast<int16_t>(area.innerY + area.innerH - 1);
+                    const int16_t copyX = innerXS < clipX ? static_cast<int16_t>(clipX) : innerXS;
+                    const int16_t copyY = innerYS < clipY ? static_cast<int16_t>(clipY) : innerYS;
+                    const int16_t copyR = (innerXS + area.innerW - 1 > clipR) ? static_cast<int16_t>(clipR) : static_cast<int16_t>(innerXS + area.innerW - 1);
+                    const int16_t copyB = (innerYS + area.innerH - 1 > clipB) ? static_cast<int16_t>(clipB) : static_cast<int16_t>(innerYS + area.innerH - 1);
                     if (copyX <= copyR && copyY <= copyB)
                     {
                         const int16_t copyW = static_cast<int16_t>(copyR - copyX + 1);
                         const int16_t copyH = static_cast<int16_t>(copyB - copyY + 1);
-                        const int16_t srcX = static_cast<int16_t>(copyX - area.innerX);
-                        const int16_t srcY = static_cast<int16_t>(copyY - area.innerY);
+                        const int16_t srcX = static_cast<int16_t>(copyX - innerXS);
+                        const int16_t srcY = static_cast<int16_t>(copyY - innerYS);
                         const size_t rowBytes = static_cast<size_t>(copyW) * sizeof(uint16_t);
                         for (int16_t y = 0; y < copyH; ++y)
                         {
@@ -561,19 +737,19 @@ namespace pipgui
             }
 
             const uint16_t grid565 = deriveGraphGridColor565(area.bgColor565);
-            t->fillRect(area.innerX, area.innerY, area.innerW, area.innerH, area.bgColor565);
+            t->fillRect(innerXS, innerYS, area.innerW, area.innerH, area.bgColor565);
 
             for (uint16_t i = 1; i < area.gridCellsX; ++i)
             {
-                const int16_t gx = area.innerX + (int16_t)((int32_t)area.innerW * i / area.gridCellsX);
-                for (int16_t yy = area.innerY; yy < area.innerY + area.innerH; ++yy)
+                const int16_t gx = innerXS + (int16_t)((int32_t)area.innerW * i / area.gridCellsX);
+                for (int16_t yy = innerYS; yy < innerYS + area.innerH; ++yy)
                     t->drawPixel(gx, yy, grid565);
             }
 
             for (uint16_t j = 1; j < area.gridCellsY; ++j)
             {
-                const int16_t gy = area.innerY + (int16_t)((int32_t)area.innerH * j / area.gridCellsY);
-                for (int16_t xx = area.innerX; xx < area.innerX + area.innerW; ++xx)
+                const int16_t gy = innerYS + (int16_t)((int32_t)area.innerH * j / area.gridCellsY);
+                for (int16_t xx = innerXS; xx < innerXS + area.innerW; ++xx)
                     t->drawPixel(xx, gy, grid565);
             }
         }
@@ -903,16 +1079,16 @@ namespace pipgui
             }
         }
 
-        static void renderBufferedGraph(GUI &gui, pipcore::Sprite *t, GraphArea &area, uint16_t maxVisible)
+        static void renderBufferedGraph(GUI &gui, pipcore::Sprite *t, GraphArea &area, uint16_t maxVisible, int16_t originX, int16_t originY)
         {
             int16_t autoMin = 0;
             int16_t autoMax = 1;
             const bool useAutoScale = area.autoScaleEnabled && resolveAutoScale(area, maxVisible, autoMin, autoMax);
-            if (!useAutoScale && canUseIncrementalScrollRender(area) &&
-                renderBufferedGraphIncremental(gui, t, area, useAutoScale, autoMin, autoMax))
+            if (!useAutoScale && !gui.tiledMode() && canUseIncrementalScrollRender(area) &&
+                renderBufferedGraphIncremental(gui, t, area, useAutoScale, autoMin, autoMax, originX, originY))
                 return;
 
-            redrawGraphInner(t, area);
+            redrawGraphInner(t, area, originX, originY);
 
             for (uint16_t line = 0; line < area.lineCount; ++line)
             {
@@ -952,6 +1128,24 @@ namespace pipgui
         if (!area || !area->pendingRender || area->innerW <= 1 || area->innerH <= 1)
             return;
 
+        if (_flags.tiledMode)
+        {
+            uint16_t visibleSamples = (uint16_t)((area->innerW > 2) ? area->innerW : 2);
+            if (area->direction == Oscilloscope)
+                visibleSamples = resolveOscilloscopeVisibleSamples(*area, visibleSamples);
+
+            tiledRenderAndPresentRect((int16_t)(area->innerX - 1), (int16_t)(area->innerY - 1),
+                                      (int16_t)(area->innerW + 2), (int16_t)(area->innerH + 2),
+                                      "tiled-flush-graph",
+                                      [&]()
+                                      {
+                                          renderBufferedGraph(*this, &_render.sprite, *area, visibleSamples, _render.originX, _render.originY);
+                                          snapshotGraphRenderCache(&_render.sprite, *area, _render.originX, _render.originY, (int16_t)_render.screenHeight);
+                                      });
+            area->pendingRender = false;
+            return;
+        }
+
         const bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;
         _flags.inSpritePass = 1;
@@ -961,7 +1155,8 @@ namespace pipgui
         if (area->direction == Oscilloscope)
             visibleSamples = resolveOscilloscopeVisibleSamples(*area, visibleSamples);
 
-        renderBufferedGraph(*this, &_render.sprite, *area, visibleSamples);
+        renderBufferedGraph(*this, &_render.sprite, *area, visibleSamples, _render.originX, _render.originY);
+        snapshotGraphRenderCache(&_render.sprite, *area, _render.originX, _render.originY, (int16_t)_render.screenHeight);
 
         _flags.inSpritePass = prevRender;
         _render.activeSprite = prevActive;
@@ -1093,7 +1288,18 @@ namespace pipgui
         area->oscVisibleSamples = scopeVisibleSamples;
         area->bgColor = bgColor;
         area->bgColor565 = bg565;
-        area->drawEpoch = (area->drawEpoch == 0xFFFFFFFFU) ? 1U : (area->drawEpoch + 1U);
+        bool bumpEpoch = true;
+        if (_flags.tiledMode && _flags.inSpritePass)
+        {
+            const int16_t tileH = _render.sprite.height();
+            if (tileH > 0)
+            {
+                const int16_t firstTileY = static_cast<int16_t>((innerY / tileH) * tileH);
+                bumpEpoch = (_render.originY == firstTileY);
+            }
+        }
+        if (bumpEpoch)
+            area->drawEpoch = (area->drawEpoch == 0xFFFFFFFFU) ? 1U : (area->drawEpoch + 1U);
 
         if (innerW <= 0 || innerH <= 0)
             return;
@@ -1110,7 +1316,7 @@ namespace pipgui
         area->gridCellsX = (cellsX > 255) ? 255 : (uint8_t)cellsX;
         area->gridCellsY = (cellsY > 255) ? 255 : (uint8_t)cellsY;
 
-        redrawGraphInner(t, *area);
+        redrawGraphInner(t, *area, _render.originX, _render.originY);
     }
 
     void GUI::updateGraphGrid(int16_t x, int16_t y,
@@ -1128,6 +1334,22 @@ namespace pipgui
         {
             drawGraphGrid(x, y, w, h, radius, dir, bgColor, speed, autoScale,
                           scopeRateHz, scopeTimebaseMs, scopeVisibleSamples);
+            return;
+        }
+
+        int16_t rx = x;
+        int16_t ry = y;
+        if (rx == center)
+            rx = AutoX(w);
+        if (ry == center)
+            ry = AutoY(h);
+
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            tiledRenderAndPresentRect((int16_t)(rx - 2), (int16_t)(ry - 2), (int16_t)(w + 4), (int16_t)(h + 4),
+                                      "tiled-update-graph-grid",
+                                      [&]()
+                                      { drawGraphGrid(x, y, w, h, radius, dir, bgColor, speed, autoScale, scopeRateHz, scopeTimebaseMs, scopeVisibleSamples); });
             return;
         }
 
@@ -1172,6 +1394,10 @@ namespace pipgui
 
         area->frameUsed = true;
 
+        pipcore::Sprite *t = getDrawTarget();
+        if (!t)
+            return;
+
         uint16_t visibleSamples = (uint16_t)((area->innerW > 2) ? area->innerW : 2);
         if (area->direction == Oscilloscope)
             visibleSamples = resolveOscilloscopeVisibleSamples(*area, visibleSamples);
@@ -1181,19 +1407,37 @@ namespace pipgui
             !ensureGraphLineBuffer(*area, lineIndex))
             return;
 
+        if (graphPaused())
+        {
+            if (blitGraphRenderCache(t, *area, _render.originX, _render.originY))
+                return;
+            renderBufferedGraph(*this, t, *area, visibleSamples, _render.originX, _render.originY);
+            area->pendingRender = false;
+            snapshotGraphRenderCache(t, *area, _render.originX, _render.originY, (int16_t)_render.screenHeight);
+            return;
+        }
+
         area->lineColors565[lineIndex] = detail::color888To565(color);
         area->lineValueMins[lineIndex] = valueMin;
         area->lineValueMaxs[lineIndex] = (valueMax > valueMin) ? valueMax : (int16_t)(valueMin + 1);
         area->lineThicknesses[lineIndex] = thickness < 1 ? 1 : thickness;
 
-        appendGraphSample(*area, lineIndex, value, visibleSamples);
+        bool appendSample = true;
+        if (_flags.tiledMode && _flags.inSpritePass)
+        {
+            const int16_t tileH = _render.sprite.height();
+            if (tileH > 0)
+            {
+                const int16_t firstTileY = static_cast<int16_t>((area->innerY / tileH) * tileH);
+                appendSample = (_render.originY == firstTileY);
+            }
+        }
+        if (appendSample)
+            appendGraphSample(*area, lineIndex, value, visibleSamples);
 
-        pipcore::Sprite *t = getDrawTarget();
-        if (!t)
-            return;
-
-        renderBufferedGraph(*this, t, *area, visibleSamples);
+        renderBufferedGraph(*this, t, *area, visibleSamples, _render.originX, _render.originY);
         area->pendingRender = false;
+        snapshotGraphRenderCache(t, *area, _render.originX, _render.originY, (int16_t)_render.screenHeight);
     }
 
     void GUI::updateGraphLine(uint8_t lineIndex,
@@ -1211,6 +1455,37 @@ namespace pipgui
         if (_screen.current >= _screen.capacity)
             return;
 
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            GraphArea *area = ensureGraphArea(_screen.current);
+            if (!area || area->innerW <= 1 || area->innerH <= 1)
+                return;
+
+            uint16_t visibleSamples = (uint16_t)((area->innerW > 2) ? area->innerW : 2);
+            if (area->direction == Oscilloscope)
+                visibleSamples = resolveOscilloscopeVisibleSamples(*area, visibleSamples);
+
+            if (!ensureGraphLineStorage(*area, lineIndex) ||
+                !ensureGraphSampleCapacity(*area, visibleSamples) ||
+                !ensureGraphLineBuffer(*area, lineIndex))
+                return;
+
+            if (graphPaused())
+            {
+                // Frozen: keep the render cache, do not consume samples and do not re-render.
+                area->pendingRender = false;
+                return;
+            }
+
+            area->lineColors565[lineIndex] = detail::color888To565(color);
+            area->lineValueMins[lineIndex] = valueMin;
+            area->lineValueMaxs[lineIndex] = (valueMax > valueMin) ? valueMax : (int16_t)(valueMin + 1);
+            area->lineThicknesses[lineIndex] = thickness < 1 ? 1 : thickness;
+            appendGraphSample(*area, lineIndex, value, visibleSamples);
+            area->pendingRender = true;
+            return;
+        }
+
         const bool prevRender = _flags.inSpritePass;
         pipcore::Sprite *prevActive = _render.activeSprite;
         _flags.inSpritePass = 1;
@@ -1220,7 +1495,7 @@ namespace pipgui
         _render.activeSprite = prevActive;
 
         GraphArea *area = ensureGraphArea(_screen.current);
-        if (area && !prevRender)
+        if (area && !prevRender && !graphPaused())
             area->pendingRender = true;
     }
 
@@ -1250,14 +1525,21 @@ namespace pipgui
         if (!t)
             return;
 
+        if (graphPaused())
+        {
+            (void)blitGraphRenderCache(t, *area, _render.originX, _render.originY);
+            return;
+        }
+
         if (lineIndex == 0 || area->oscClearEpoch != area->drawEpoch)
         {
             area->oscClearEpoch = area->drawEpoch;
-            redrawGraphInner(t, *area);
+            redrawGraphInner(t, *area, _render.originX, _render.originY);
         }
 
         const SeriesWindow window{0, sampleCount, sampleCount};
         renderSeries(*this, t, *area, samples, window, sampleCount, detail::color888To565(color), valueMin, valueMax, thickness);
+        snapshotGraphRenderCache(t, *area, _render.originX, _render.originY, (int16_t)_render.screenHeight);
     }
 
     void GUI::updateGraphSamples(uint8_t lineIndex,
@@ -1271,6 +1553,23 @@ namespace pipgui
         if (!_flags.spriteEnabled || !_disp.display)
         {
             drawGraphSamples(lineIndex, samples, sampleCount, color, valueMin, valueMax, thickness);
+            return;
+        }
+
+        if (_flags.tiledMode && !_flags.inSpritePass)
+        {
+            if (_screen.current >= _screen.capacity)
+                return;
+
+            GraphArea *area = ensureGraphArea(_screen.current);
+            if (!area || area->innerW <= 1 || area->innerH <= 1)
+                return;
+
+            tiledRenderAndPresentRect((int16_t)(area->innerX - 1), (int16_t)(area->innerY - 1),
+                                      (int16_t)(area->innerW + 2), (int16_t)(area->innerH + 2),
+                                      "tiled-update-graph-samples",
+                                      [&]()
+                                      { drawGraphSamples(lineIndex, samples, sampleCount, color, valueMin, valueMax, thickness); });
             return;
         }
 

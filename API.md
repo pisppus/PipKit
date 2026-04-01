@@ -2,6 +2,17 @@
 
 Этот файл описывает актуальный публичный API `pipGUI` и `pipCore`, который есть в коде проекта.
 
+## Требования к компиляции (PlatformIO)
+
+`pipKit` использует C++17. Для PlatformIO добавьте в `platformio.ini`:
+
+```ini
+build_unflags =
+    -std=gnu++11
+build_flags =
+    -std=gnu++17
+```
+
 ---
 
 # 1. Build-time флаги
@@ -68,11 +79,21 @@ ui.configDisplay()
 После конфигурации дисплея вызывается `begin()`:
 
 ```cpp
-ui.begin(0);   // rotation: 0..3
+ui.begin(0);        // rotation: 0..3
+// ui.begin(0, true);  // forceTiles: принудительно включить tiled-mode (2 горизонтальных тайла)
 ```
  
 - `rotation` принимает значения `0..3`.
+- `forceTiles=true` включает tiled-mode даже если хватает памяти на полный screen-buffer.
+- если полный screen-buffer выделить не получилось, библиотека автоматически включает tiled-mode: выделяет буфер `screenWidth × ceil(screenHeight/2)` и рисует кадр в 2 прохода (верх/низ).
 - стартовый фон GUI фиксированно чёрный (`0x0000`).
+
+Ограничения tiled-mode:
+
+- screen-transition анимации отключены (требуют полного screen-buffer).
+- rotation-transition анимация отключена.
+
+Проверить текущий режим можно через `ui.tiledMode()`.
 
 ### Runtime-поворот экрана
 
@@ -856,8 +877,32 @@ void loop()
 }
 ```
 
-`loopWithInput(...)` только обновляет сами объекты `Button` и потом вызывает `ui.loop()`.
-Логику экранов, списков и плиток вы всё равно задаёте отдельно.
+Вариант с тремя кнопками (Next/Prev/Select):
+
+```cpp
+Button Next(1, Pullup);
+Button Prev(2, Pullup);
+Button Select(3, Pullup);
+
+void setup()
+{
+    Next.begin();
+    Prev.begin();
+    Select.begin();
+}
+
+void loop()
+{
+    ui.loopWithInput(Next, Prev, Select);
+}
+```
+
+`loopWithInput(...)` обновляет объекты `Button`, обрабатывает ввод для built-in overlay/меню (list/tile/popup/error/notification) и затем вызывает `ui.loop()`.
+Если вам нужен свой state-machine ввода, используйте `pollInput(...)` и/или передавайте состояния кнопок вручную через `...Input()` fluent-методы.
+
+По умолчанию `loopWithInput(...)` включает авто-переходы между экранами по коротким нажатиям `Next/Prev` (когда не активны overlay/меню).
+`loopWithPolledInput()` обрабатывает built-in overlay/меню на основании последнего `pollInput(...)` и так же включает авто-переходы между экранами по коротким нажатиям `Next/Prev` (как `loopWithInput(...)`).
+Чтобы отключить авто-навигацию на текущем тике (если вы используете кнопки под свой сценарий), вызовите `ui.consumeAutoNav()` до `loopWithPolledInput()`.
 
 Если `loopWithInput(...)` не используется, вызывайте `btn.update()` сами в начале каждого `loop()`.
 После этого `wasPressed()` и `isDown()` читают уже обновлённое состояние кнопки.
@@ -868,7 +913,13 @@ void loop()
 InputState input = ui.pollInput(Next, Prev);
 ```
 
-`pollInput(...)` сам обновляет обе кнопки и возвращает готовый снимок их состояния на текущий тик.
+или (если есть кнопка выбора):
+
+```cpp
+InputState input = ui.pollInput(Next, Prev, Select);
+```
+
+`pollInput(...)` сам обновляет кнопки и возвращает готовый снимок их состояния на текущий тик.
 
 Поля `InputState`:
 
@@ -876,12 +927,42 @@ InputState input = ui.pollInput(Next, Prev);
 - `prevDown` - кнопка `Prev` сейчас удерживается
 - `nextPressed` - кнопка `Next` была нажата именно в этом тике
 - `prevPressed` - кнопка `Prev` была нажата именно в этом тике
+- `selectDown` - кнопка `Select` сейчас удерживается (если включен 3-button режим)
+- `selectPressed` - кнопка `Select` была нажата именно в этом тике (если включен 3-button режим)
 - `comboDown` - обе кнопки сейчас зажаты одновременно
+- `hasSelect` - true, если `pollInput/loopWithInput` вызваны в 3-button режиме
 
 Разница простая:
 
 - `Down` - состояние удержания
 - `Pressed` - одноразовое событие нажатия
+
+### 10.2.1. Где библиотека использует кнопки (шорткаты и встроенные сценарии)
+
+Если вы используете `loopWithInput(...)` или вручную прокидываете `...Input()` fluent-методы, то кнопки обрабатываются в этих местах:
+
+- **Скриншоты (built-in shortcut):** удержание `Next + Prev` (если включены screenshots) — захват скриншота.
+- **List menu (`updateList`):**
+  - `Next/Prev` коротко — перемещение по пунктам.
+  - **2-button режим:** удержание `Next` — открыть `targetScreen`.
+  - **3-button режим:** короткое нажатие `Select` — открыть `targetScreen`.
+  - удержание `Prev` — `backScreen()` (назад по history).
+- **Tile menu (`updateTile`):** то же самое, что и list (перемещение `Next/Prev`, открыть `Next-hold` или `Select-press`, назад `Prev-hold`).
+- **Popup menu:** `Next/Prev` — перемещение; **2-button:** `Next-hold` подтверждает; **3-button:** `Select-press` подтверждает; `Prev-hold` закрывает.
+- **Notification overlay:** закрывается через встроенную обработку ввода:
+  - **2-button режим:** `Prev` подтверждает/закрывает.
+  - **3-button режим:** `Select` подтверждает/закрывает (и `Prev` тоже принимается для совместимости).
+- **Error overlay:** `Next/Prev` переключают ошибки; комбинация (`comboDown`) используется для подтверждения/закрытия (зависит от типа ошибки).
+- **Slider:** `Next/Prev` двигают значение (берётся из последнего `pollInput(...)`).
+- **Graph pause (только 3-button режим):** `Select` на экранах с графиком переключает паузу (см. раздел 14.4).
+- **Auto screen-nav:** при использовании `loopWithInput(...)` короткие `Next/Prev` переключают экраны через `nextScreen()/prevScreen()` когда не активны overlay/меню.
+
+Если вы используете `Next/Prev` под кастомную логику на каком-то экране (и не хотите авто-переключения экранов),
+после своей обработки вызовите:
+
+```cpp
+ui.consumeAutoNav();
+```
 
 ## 10.3. Управление экранами
 
@@ -891,13 +972,14 @@ InputState input = ui.pollInput(Next, Prev);
 ui.setScreen(ScreenHome);      // сразу переключает на указанный экран
 ui.currentScreen();            // возвращает id текущего активного экрана
 ui.nextScreen();               // переходит на следующий экран по порядку регистрации
-ui.prevScreen();               // возвращает назад по navigation-history
+ui.prevScreen();               // переходит на предыдущий экран по порядку регистрации (циклически)
+ui.backScreen();               // возвращает назад по navigation-history
 ui.screenTransitionActive();   // показывает, что переход между экранами сейчас ещё идёт
 ```
 
 Что важно:
 
-- библиотека сама ведёт history переходов между экранами
+- библиотека сама ведёт history переходов между экранами (для `backScreen()`)
 - если экран меняется через `setScreen(...)`, текущий экран добавляется в history автоматически
 
 ## 10.4. Принудительная перерисовка
@@ -931,6 +1013,9 @@ ui.setScreenAnim(SlideX, 250);
 - `PIPGUI_STATUS_BAR`
   - `1` включает код статус-бара
   - `0` вырезает runtime-реализацию, публичные методы остаются no-op
+- `PIPGUI_DEBUG_METRICS`
+  - `1` включает debug-режим: библиотека рисует диагностический текст в статус-баре (FPS/время кадра/память и т.п.)
+  - `0` выключено (по умолчанию)
 
 Обычно эти флаги задаются в `include/config.hpp`.
 
@@ -1327,19 +1412,12 @@ SCREEN(ScreenMainMenu, 1)
 - `Cards`
 - `Plain`
 
-Ввод в `loop()`:
-
-```cpp
-ui.listInput()
-    .nextDown(btnNext.isDown())            // кнопка NEXT сейчас удерживается
-    .prevDown(btnPrev.isDown());           // кнопка PREV сейчас удерживается
-```
-
 Поведение:
 
 - короткое отпускание `NEXT` переключает пункт вперёд;
 - короткое отпускание `PREV` переключает пункт назад;
-- удержание `NEXT` открывает `targetScreen` выбранного пункта;
+- **2-button режим:** удержание `NEXT` открывает `targetScreen` выбранного пункта;
+- **3-button режим:** короткое нажатие `SELECT` открывает `targetScreen` выбранного пункта;
 - удержание `PREV` возвращает на предыдущий экран из navigation-history.
 
 ## 13.2. Плиточное меню
@@ -1365,13 +1443,13 @@ SCREEN(ScreenTiles, 2)
 }
 ```
 
-Ввод:
+Поведение:
 
-```cpp
-ui.tileInput()
-    .nextDown(btnNext.isDown())           // кнопка NEXT сейчас удерживается
-    .prevDown(btnPrev.isDown());          // кнопка PREV сейчас удерживается
-```
+- короткое отпускание `NEXT` переключает плитку вперёд;
+- короткое отпускание `PREV` переключает плитку назад;
+- **2-button режим:** удержание `NEXT` открывает `targetScreen` выбранной плитки;
+- **3-button режим:** короткое нажатие `SELECT` открывает `targetScreen` выбранной плитки;
+- удержание `PREV` возвращает на предыдущий экран из navigation-history.
 
 Режимы плитки:
 
@@ -1495,6 +1573,21 @@ ui.drawGraphGrid()
 - `Oscilloscope` использует фиксированное окно видимых samples
 - если `visible(0)`, окно для `Oscilloscope` вычисляется из `rateHz * timebaseMs`
 
+## 14.4. Пауза графиков (freeze)
+
+В **3-button режиме**, библиотека поддерживает заморозку графика:
+
+- короткое нажатие `Select` на экране, где рисуется граф, переключает pause/resume **только для графика этого экрана**;
+- во время паузы новые значения/массивы для графиков **игнорируются**, а на экране остаётся последний отрисованный кадр графа.
+
+```cpp
+bool paused = ui.graphPaused();                 // текущее состояние
+bool toggled = ui.GraphPauseToggled();          // одноразовое событие (true один раз после переключения)
+```
+
+Важно:
+
+- механизм включён только когда реально есть 3-я кнопка (3-button режим);
 ---
 
 # 15. Уведомления, toast, ошибки
@@ -1545,7 +1638,6 @@ ui.showNotification()
 
 ```cpp
 bool active = ui.notificationActive();
-ui.setNotificationButtonDown(btnOk.isDown());
 ```
 
 ## 15.3. Popup menu
@@ -1569,19 +1661,12 @@ ui.showPopupMenu()
     .selected(0);                      // стартовый выделенный пункт; если не задавать, берется дефолт
 ```
 
-Во время активности меню:
+Результат выбора:
 
 ```cpp
-if (ui.popupMenuActive())                             // значит, что меню сейчас открыто и перехватило ввод
+if (ui.popupMenuHasResult())                      // говорит, что пользователь уже выбрал пункт
 {
-    ui.popupMenuInput()
-        .nextDown(btnNext.isDown())                   // перемещение вперед по пунктам
-        .prevDown(btnPrev.isDown());                  // перемещение назад по пунктам
-
-    if (ui.popupMenuHasResult())                      // говорит, что пользователь уже выбрал пункт
-    {
-        int16_t picked = ui.popupMenuTakeResult();    // возвращает индекс выбранного пункта и сразу сбрасывает флаг результата
-    }
+    int16_t picked = ui.popupMenuTakeResult();    // возвращает индекс выбранного пункта и сразу сбрасывает флаг результата
 }
 ```
 
@@ -1590,6 +1675,11 @@ if (ui.popupMenuActive())                             // значит, что м
 - `.selected(index)` нужен только если хочешь вручную задать стартовый курсор
 - `.anchor(component)` берет прямоугольник fluent-компонента и открывает меню по центру над ним или под ним
 - если использовать короткий паттерн без `popupMenuHasResult()`, то `popupMenuTakeResult() == -1` значит, что результата пока нет
+
+Выбор пункта:
+
+- **2-button режим:** удержание `NEXT` подтверждает текущий пункт; удержание `PREV` закрывает меню без выбора
+- **3-button режим:** короткое нажатие `SELECT` подтверждает текущий пункт; удержание `PREV` закрывает меню без выбора
  
 ## 15.4. Ошибки
 
