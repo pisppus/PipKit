@@ -1,10 +1,10 @@
-﻿# pipKit API
+﻿# PipKit API
 
-Этот файл описывает актуальный публичный API `pipGUI` и `pipCore`, который есть в коде проекта.
+Этот файл описывает актуальный публичный API `PipGUI` и `PipCore`, который есть в коде проекта.
 
 ## Требования к компиляции (PlatformIO)
 
-`pipKit` использует C++17. Для PlatformIO добавьте в `platformio.ini`:
+`PipKit` использует C++17. Для PlatformIO добавьте в `platformio.ini`:
 
 ```ini
 build_unflags =
@@ -17,22 +17,53 @@ build_flags =
 
 # 1. Build-time флаги
 
-Низкий слой `pipCore` выбирает платформу и драйвер дисплея на этапе компиляции.
+Низкий слой `PipCore` выбирает платформу, драйвер дисплея и optional backend-модули на этапе компиляции.
 Эти флаги задаются в `include/config.hpp`.
 
 - `PIPCORE_DISPLAY`
   - пример: `#define PIPCORE_DISPLAY ST7789`
+  - поддерживаемые дисплеи: `ST7789`, `ILI9488`
 - `PIPCORE_PLATFORM`
   - пример: `#define PIPCORE_PLATFORM ESP32`
+- `PIPCORE_ENABLE_PREFS`
+  - `0` или `1`
+- `PIPCORE_ENABLE_WIFI`
+  - `0` или `1`
+- `PIPCORE_ENABLE_OTA`
+  - `0` или `1`
+- `PIPCORE_OTA_PROJECT_URL`
+  - базовый OTA URL для core-level OTA backend
 
 Пример через `include/config.hpp`:
 
 ```cpp
 #define PIPCORE_PLATFORM ESP32
 #define PIPCORE_DISPLAY ST7789
+#define PIPCORE_ENABLE_PREFS 1
+#define PIPCORE_ENABLE_WIFI 1
+#define PIPCORE_ENABLE_OTA 1
+#define PIPCORE_OTA_PROJECT_URL "https://example.com/fw/PipGUI"
 ```
 
-Если флаги не заданы, а в проекте собран ровно один backend платформы и ровно один backend дисплея, они выбираются автоматически.
+Пример для `ILI9488`:
+
+```cpp
+#define PIPCORE_PLATFORM ESP32
+#define PIPCORE_DISPLAY ILI9488
+#define PIPCORE_ENABLE_PREFS 1
+#define PIPCORE_ENABLE_WIFI 1
+#define PIPCORE_ENABLE_OTA 1
+#define PIPCORE_OTA_PROJECT_URL "https://example.com/fw/PipGUI"
+```
+
+Что важно:
+
+- по умолчанию optional-модули `PipCore` выключены
+- если внешний код использует `pipcore::net::*` при `PIPCORE_ENABLE_WIFI=0`, сборка падает на этапе компиляции
+- если внешний код использует `pipcore::ota::*` при `PIPCORE_ENABLE_OTA=0`, сборка тоже падает на этапе компиляции
+- это намеренное поведение: выключенный модуль нельзя использовать "молча"
+- `PIPGUI_*` и `PIPCORE_*` это разные слои конфигурации: GUI и Core соответственно
+- если `PipGUI` реально использует Wi-Fi / OTA, соответствующие `PIPCORE_ENABLE_*` тоже должны быть включены явно
 
 ---
 
@@ -61,18 +92,35 @@ ui.configDisplay()
     .size(240, 320);
 ```
 
-Можно не писать и оставить дефолт библиотеки:
+Можно не писать и оставить display-specific дефолты core/drivers:
 
-- `hz(freq)` по умолчанию `80000000`
-- `order("RGB")` по умолчанию `RGB`
+- `hz(freq)`:
+  - `ST7789` по умолчанию `80000000`
+  - `ILI9488` по умолчанию `60000000`
+- `order("RGB")`:
+  - `ST7789` по умолчанию `RGB`
+  - `ILI9488` по умолчанию `BGR`
 - `invert(bool)` по умолчанию `true`
 - `swap(bool)` по умолчанию `false`
 - `offset(x, y)` по умолчанию `(0, 0)`
+
+Что важно:
+
+- если `hz(...)` или `order(...)` не заданы, используются именно дефолты выбранного драйвера в `PipCore`
+- это особенно важно для `ILI9488`, потому что его рабочие дефолты отличаются от `ST7789`
 
 Обязательно указать:
 
 - `pins(...)` задаёт пины SPI и управляющие пины дисплея.
 - `size(width, height)` задаёт логический размер панели.
+
+Пример для `ILI9488`:
+
+```cpp
+ui.configDisplay()
+    .pins(11, 12, 10, 9, 14)
+    .size(320, 480);
+```
 
 ## 2.2. Запуск GUI
 
@@ -551,7 +599,7 @@ ui.updateAnimIcon()
 Чтобы добавить свою иконку:
 
 1. положить source-файл в `tools/icons/sources/`
-2. пересобрать проект — генератор сам обновит готовые файлы в `lib/pipKit/pipGUI/Graphics/Text/Icons/`
+2. пересобрать проект — генератор сам обновит готовые файлы в `lib/PipKit/PipGUI/Graphics/Text/Icons/`
 3. использовать иконку по имени файла
 
 Пример:
@@ -1042,7 +1090,7 @@ ui.configStatusBar()
 
 ```cpp
 ui.setStatusBarText()
-    .left("pipGUI")
+    .left("PipGUI")
     .center("12:34")
     .right("Wi-Fi");
 ```
@@ -1726,7 +1774,7 @@ ui.setErrorButtonsDown(btnNext.isDown(), btnPrev.isDown(), btnCombo.isDown());  
   - `1` — serial capture
   - `2` — запись в LittleFS
 
-Для режима `2` нужен LittleFS. Библиотека сама создаёт `/pipKit/`, `/pipKit/screenshots/` и `/pipKit/thumbnails/`.
+Для режима `2` нужен LittleFS. Библиотека сама создаёт `/PipKit/`, `/PipKit/screenshots/` и `/PipKit/thumbnails/`.
 
 ## 16.2. Serial capture
 
@@ -1748,8 +1796,8 @@ python tools/screenshots/bin/capture.py --port COM9 --baud 1000000
 
 В режиме `2` сохраняются:
 
-- full screenshot: `/pipKit/screenshots/pscr_00000001.pscr`
-- thumbnail: `/pipKit/thumbnails/<WxH>/pscr_00000001.pscr`
+- full screenshot: `/PipKit/screenshots/pscr_00000001.pscr`
+- thumbnail: `/PipKit/thumbnails/<WxH>/pscr_00000001.pscr`
 
 Галерея показывает новые сверху.
 
@@ -1799,9 +1847,15 @@ uint8_t count = ui.screenshotCount();
   - `0` — standalone Wi‑Fi path не обслуживается автоматически
 - `PIPGUI_WIFI_SSID`
 - `PIPGUI_WIFI_PASSWORD`
+- `PIPCORE_ENABLE_WIFI`
+  - должен быть `1`, если используется внешний или внутренний Wi‑Fi API `PipCore`
 
 Важно:
 
+- `PIPGUI_WIFI` и `PIPCORE_ENABLE_WIFI` это не одно и то же
+- `PIPGUI_WIFI` включает GUI-level сценарии и auto-service в `GUI::loop()`
+- `PIPCORE_ENABLE_WIFI` включает сам backend в `PipCore`
+- если GUI или прошивка вызывают `pipcore::net::*`, а `PIPCORE_ENABLE_WIFI=0`, будет compile-time ошибка
 - OTA продолжает работать и при `PIPGUI_WIFI = 0`
 - у OTA свой runtime-path, он не зависит от standalone Wi‑Fi servicing в `GUI::loop()`
 
@@ -1855,11 +1909,15 @@ python tools/ota/verify.py
 Обычно всё задаётся в `include/config.hpp`: 
 
 ```cpp
+#define PIPCORE_ENABLE_WIFI 1
+#define PIPCORE_ENABLE_OTA 1
+#define PIPCORE_OTA_PROJECT_URL "https://example.com/fw/pipGUI"
+
 #define PIPGUI_OTA 1
 #define PIPGUI_OTA_PROJECT_URL "https://example.com/fw/pipGUI"
 #define PIPGUI_OTA_ED25519_PUBKEY_HEX "..."
 
-#define PIPGUI_FIRMWARE_TITLE "pipGUI"
+#define PIPGUI_FIRMWARE_TITLE "PipGUI"
 #define PIPGUI_FIRMWARE_VER_MAJOR 1
 #define PIPGUI_FIRMWARE_VER_MINOR 0
 #define PIPGUI_FIRMWARE_VER_PATCH 2
@@ -1867,6 +1925,9 @@ python tools/ota/verify.py
 
 Что это значит:
 
+- `PIPCORE_ENABLE_WIFI` включает core-level Wi‑Fi backend, без него OTA API `PipCore` недоступен
+- `PIPCORE_ENABLE_OTA` включает core-level OTA backend
+- `PIPCORE_OTA_PROJECT_URL` это URL, который использует сам `PipCore` OTA backend
 - `PIPGUI_OTA` включает сам OTA subsystem
 - `PIPGUI_OTA_PROJECT_URL` это базовый URL проекта, откуда берутся manifest и бинарники
 - `PIPGUI_OTA_ED25519_PUBKEY_HEX` это публичный ключ, которым проверяется подпись manifest и firmware
@@ -1875,6 +1936,7 @@ python tools/ota/verify.py
 
 Что обычно важно:
 
+- если GUI использует OTA, то мало включить только `PIPGUI_OTA`, нужно ещё включить `PIPCORE_ENABLE_WIFI=1` и `PIPCORE_ENABLE_OTA=1`
 - без `PIPGUI_OTA_ED25519_PUBKEY_HEX` нормальная защищенная OTA-схема не имеет смысла
 - URL и версия это то, что меняют чаще всего
 - если OTA не нужен, достаточно держать `PIPGUI_OTA 0`

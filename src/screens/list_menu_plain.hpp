@@ -16,6 +16,5 @@ SCREEN(listMenuPlain, 10)
           listItem("Font compare", "PSDF", fontCompare))
       .inactive(ui.rgb(8, 8, 8))
       .active(ui.rgb(21, 54, 140))
-      .cardSize(310, 34)
       .mode(Plain);
 }

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <pipKit.hpp>
-#include <pipGUI/Systems/Network/Wifi.hpp>
-#include <pipGUI/Systems/Update/Ota.hpp>
+#include <PipKit.hpp>
+#include <PipGUI/Systems/Network/Wifi.hpp>
+#include <PipGUI/Systems/Update/Ota.hpp>
 
 using namespace pipgui;
 

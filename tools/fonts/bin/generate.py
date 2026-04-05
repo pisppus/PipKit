@@ -22,7 +22,7 @@ from psdf import (
 )
 
 def _out_fonts_root(project_dir: str) -> str:
-    return os.path.join(project_dir, "lib", "pipKit", "pipGUI", "Graphics", "Text", "Fonts")
+    return os.path.join(project_dir, "lib", "PipKit", "PipGUI", "Graphics", "Text", "Fonts")
 
 
 def _load_config(project_dir: str):

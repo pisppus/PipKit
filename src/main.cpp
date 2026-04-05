@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <math.h>
-#include <pipKit.hpp>
-#include <pipGUI/Systems/Network/Wifi.hpp>
-#include <pipGUI/Systems/Update/Ota.hpp>
+#include <PipKit.hpp>
+#include <PipGUI/Systems/Network/Wifi.hpp>
+#include <PipGUI/Systems/Update/Ota.hpp>
 
 using namespace pipgui;
 
@@ -356,7 +356,7 @@ void updateClockDisplay(uint32_t nowMs)
   char buf[6];
   snprintf(buf, sizeof(buf), "%02u:%02u", (unsigned)h, (unsigned)m);
   ui.setStatusBarText()
-      .left("pipGUI")
+      .left("PipGUI")
       .center(String(buf))
       .right("");
   if (!ui.notificationActive())
@@ -423,7 +423,7 @@ void setup()
 
   ui.configDisplay()
       .pins({11, 12, 10, 9, 14})
-      .size(240, 320);
+      .size(320, 480);
 
   ui.begin(3, true); // force tiled rendering (2 horizontal tiles) for testing
 #if (PIPGUI_DEMO_ADAPTIVE_PREVIEW != 0)
@@ -437,7 +437,7 @@ void setup()
       .style(Solid);
   #endif
   ui.setStatusBarText()
-      .left("pipGUI")
+      .left("PipGUI")
       .center("00:00")
       .right("");
   ui.setStatusBarBattery(100, Bar);

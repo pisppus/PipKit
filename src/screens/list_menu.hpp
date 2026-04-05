@@ -43,6 +43,5 @@ SCREEN(listMenu, 7)
           listItem("Test: Squircles", "fill/draw squircle AA", testSquircles),
           listItem("Auto text color", "BT.709 luminance test", autoTextColor))
       .inactive(ui.rgb(8, 8, 8))
-      .active(ui.rgb(21, 54, 140))
-      .cardSize(310, 50);
+      .active(ui.rgb(21, 54, 140));
 }

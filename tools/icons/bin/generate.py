@@ -32,7 +32,7 @@ from psdf import (
 
 
 def _out_icons_dir(project_dir: str) -> str:
-    return os.path.join(project_dir, "lib", "pipKit", "pipGUI", "Graphics", "Text", "Icons")
+    return os.path.join(project_dir, "lib", "PipKit", "PipGUI", "Graphics", "Text", "Icons")
 
 
 def _icons_sources_dir(project_dir: str) -> str:
