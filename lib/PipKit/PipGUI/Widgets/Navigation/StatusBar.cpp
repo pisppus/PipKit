@@ -1,7 +1,9 @@
 #include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Core/Debug.hpp>
+#include <PipGUI/Core/Debug/Debug.hpp>
+
 #if PIPGUI_STATUS_BAR
 #include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+
 #include <algorithm>
 #endif
 
@@ -583,6 +585,15 @@ namespace pipgui
                                                               measureTextWidth(_status.textLeft),
                                                               measureTextWidth(_status.textCenter),
                                                               measureTextWidth(_status.textRight));
+        debugRecordLayoutRectGlobal(x, y, w, h);
+        if (layout.leftRect.w > 0 && layout.leftRect.h > 0)
+            debugRecordLayoutRectGlobal(layout.leftRect.x, layout.leftRect.y, layout.leftRect.w, layout.leftRect.h);
+        if (layout.centerRect.w > 0 && layout.centerRect.h > 0)
+            debugRecordLayoutRectGlobal(layout.centerRect.x, layout.centerRect.y, layout.centerRect.w, layout.centerRect.h);
+        if (layout.rightRect.w > 0 && layout.rightRect.h > 0)
+            debugRecordLayoutRectGlobal(layout.rightRect.x, layout.rightRect.y, layout.rightRect.w, layout.rightRect.h);
+        if (layout.batteryRect.w > 0 && layout.batteryRect.h > 0)
+            debugRecordLayoutRectGlobal(layout.batteryRect.x, layout.batteryRect.y, layout.batteryRect.w, layout.batteryRect.h);
 
         const auto drawTextAt = [&](const String &s, int16_t tx)
         {

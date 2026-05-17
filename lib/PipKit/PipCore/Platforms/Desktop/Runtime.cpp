@@ -812,6 +812,14 @@ namespace pipcore::desktop
             DestroyWindow(hwnd);
             return 0;
         case WM_DESTROY:
+            if (self->_recording.active)
+                self->stopRecording();
+            self->_prevDown = false;
+            self->_nextDown = false;
+            self->_selectDown = false;
+            self->_dirty = false;
+            self->_statusText.clear();
+            self->_statusUntilUs = 0;
             self->_shouldQuit = true;
             self->_hwnd = nullptr;
             PostQuitMessage(0);

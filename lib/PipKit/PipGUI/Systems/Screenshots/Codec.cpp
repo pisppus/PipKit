@@ -6,7 +6,7 @@ namespace pipgui::detail
 #if (PIPGUI_SCREENSHOT_MODE == 2)
     namespace
     {
-        [[nodiscard]] bool decodePacked565To565(fs::File &f, uint16_t w, uint16_t h, uint16_t *dst, uint32_t payloadSize, uint32_t *outPayloadCrc32) noexcept
+        [[nodiscard]] bool decodePacked565To565(pipcore::storage::File &f, uint16_t w, uint16_t h, uint16_t *dst, uint32_t payloadSize, uint32_t *outPayloadCrc32) noexcept
         {
             if (!dst || w == 0 || h == 0 || payloadSize == 0)
                 return false;
@@ -33,7 +33,7 @@ namespace pipgui::detail
             return true;
         }
 
-        [[nodiscard]] bool encodePacked565ToFile(fs::File &f, const uint16_t *src565, uint16_t w, uint16_t h, uint32_t &outBytes, uint32_t *outPayloadCrc32) noexcept
+        [[nodiscard]] bool encodePacked565ToFile(pipcore::storage::File &f, const uint16_t *src565, uint16_t w, uint16_t h, uint32_t &outBytes, uint32_t *outPayloadCrc32) noexcept
         {
             outBytes = 0;
             if (!src565 || w == 0 || h == 0)
@@ -201,12 +201,12 @@ namespace pipgui::detail
         }
     }
 
-    [[nodiscard]] bool decodeScreenshotPayloadTo565(fs::File &f, uint16_t w, uint16_t h, uint16_t *dst, uint32_t payloadSize, uint32_t *outPayloadCrc32) noexcept
+    [[nodiscard]] bool decodeScreenshotPayloadTo565(pipcore::storage::File &f, uint16_t w, uint16_t h, uint16_t *dst, uint32_t payloadSize, uint32_t *outPayloadCrc32) noexcept
     {
         return decodePacked565To565(f, w, h, dst, payloadSize, outPayloadCrc32);
     }
 
-    [[nodiscard]] bool encodeScreenshotPayload565ToFile(fs::File &f, const uint16_t *src565, uint16_t w, uint16_t h, uint32_t &outBytes, uint32_t *outPayloadCrc32) noexcept
+    [[nodiscard]] bool encodeScreenshotPayload565ToFile(pipcore::storage::File &f, const uint16_t *src565, uint16_t w, uint16_t h, uint32_t &outBytes, uint32_t *outPayloadCrc32) noexcept
     {
         return encodePacked565ToFile(f, src565, w, h, outBytes, outPayloadCrc32);
     }

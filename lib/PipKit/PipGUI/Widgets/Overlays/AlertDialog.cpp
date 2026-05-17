@@ -1,46 +1,18 @@
 #include <PipGUI/Core/GUI.hpp>
+#include <PipGUI/Graphics/Utils/Easing.hpp>
 
 namespace pipgui
 {
     namespace
     {
-        float cubicBezierPoint(float u, float p1, float p2)
-        {
-            const float inv = 1.0f - u;
-            return 3.0f * inv * inv * u * p1 + 3.0f * inv * u * u * p2 + u * u * u;
-        }
-
-        float cubicBezierEase(float t, float x1, float y1, float x2, float y2)
-        {
-            if (t <= 0.0f)
-                return 0.0f;
-            if (t >= 1.0f)
-                return 1.0f;
-
-            float lo = 0.0f;
-            float hi = 1.0f;
-            float u = t;
-            for (uint8_t i = 0; i < 10; ++i)
-            {
-                const float x = cubicBezierPoint(u, x1, x2);
-                if (x < t)
-                    lo = u;
-                else
-                    hi = u;
-                u = (lo + hi) * 0.5f;
-            }
-
-            return cubicBezierPoint(u, y1, y2);
-        }
-
         float notificationEnterEase(float t)
         {
-            return cubicBezierEase(t, 0.16f, 1.0f, 0.30f, 1.0f);
+            return detail::motion::cubicBezierEase(t, 0.16f, 1.0f, 0.30f, 1.0f);
         }
 
         float notificationExitEase(float t)
         {
-            return cubicBezierEase(t, 0.40f, 0.0f, 1.0f, 1.0f);
+            return detail::motion::cubicBezierEase(t, 0.40f, 0.0f, 1.0f, 1.0f);
         }
 
         constexpr uint8_t kAlertMaxMessageLines = 2;

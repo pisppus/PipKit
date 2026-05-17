@@ -1,13 +1,16 @@
 #pragma once
 
-#include <algorithm>
-#include <math.h>
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Core/Internal/GuiAccess.hpp>
+
 #include <PipGUI/Graphics/Draw/Blend.hpp>
-#include <PipGUI/Graphics/Utils/Colors.hpp>
 #include <PipGUI/Graphics/Text/Fonts/KronaOne/Metrics.hpp>
 #include <PipGUI/Graphics/Text/Fonts/WixMadeForDisplay/Metrics.hpp>
+#include <PipGUI/Graphics/Utils/Colors.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 namespace pipgui
 {
@@ -85,7 +88,18 @@ namespace pipgui
                 return 0;
 
             const char *buf = text.c_str();
-            size_t pos = len - 1;
+            size_t pos = std::min(len, text.length()) - 1;
+            while (pos > 0 && (((uint8_t)buf[pos] & 0xC0U) == 0x80U))
+                --pos;
+            return pos;
+        }
+
+        static inline size_t utf8BoundaryFloor(const char *buf, size_t len, size_t pos)
+        {
+            if (!buf)
+                return 0;
+            if (pos >= len)
+                return len;
             while (pos > 0 && (((uint8_t)buf[pos] & 0xC0U) == 0x80U))
                 --pos;
             return pos;
@@ -164,6 +178,24 @@ namespace pipgui
         int16_t originY = 0;
     };
 
+    inline constexpr uint16_t FAST_GLYPH_ASCII_LIMIT = 128;
+    inline constexpr uint8_t FAST_KERNING_CACHE_SIZE = 32;
+
+    struct GlyphLookupCache
+    {
+        const FontData *font = nullptr;
+        const Glyph *ascii[FAST_GLYPH_ASCII_LIMIT] = {};
+        const Glyph *fallback = nullptr;
+    };
+
+    struct KerningLookupCacheEntry
+    {
+        const FontData *font = nullptr;
+        uint32_t left = 0;
+        uint32_t right = 0;
+        int16_t adjust = 0;
+    };
+
     struct KerningPair
     {
         uint32_t left;
@@ -174,6 +206,41 @@ namespace pipgui
     };
 
     [[nodiscard]] const FontData *fontDataForId(FontId fontId);
+
+    static inline GlyphLookupCache &glyphLookupCacheFor(const FontData *font)
+    {
+        static GlyphLookupCache caches[8]{};
+        GlyphLookupCache *slot = &caches[0];
+
+        for (GlyphLookupCache &cache : caches)
+        {
+            if (cache.font == font)
+                return cache;
+            if (!cache.font)
+            {
+                slot = &cache;
+                break;
+            }
+        }
+
+        slot->font = font;
+        std::fill_n(slot->ascii, FAST_GLYPH_ASCII_LIMIT, nullptr);
+        slot->fallback = nullptr;
+
+        if (!font)
+            return *slot;
+
+        const Glyph *glyphs = (const Glyph *)font->glyphs;
+        for (uint16_t i = 0; i < font->glyphCount; ++i)
+        {
+            const Glyph *glyph = &glyphs[i];
+            if (glyph->codepoint < FAST_GLYPH_ASCII_LIMIT)
+                slot->ascii[glyph->codepoint] = glyph;
+            if (glyph->codepoint == (uint32_t)'?')
+                slot->fallback = glyph;
+        }
+        return *slot;
+    }
 
     static inline float fontTrackingPx(const FontData *font, float sizePx)
     {
@@ -198,6 +265,14 @@ namespace pipgui
         if (!font || !font->kerningPairs || font->kerningPairCount == 0 || sizePx <= 0.0f)
             return 0.0f;
 
+        static KerningLookupCacheEntry cache[FAST_KERNING_CACHE_SIZE]{};
+        const uint32_t hash = ((uint32_t)(((uintptr_t)font >> 4) & 0xFFFFFFFFu) ^
+                               (prevCodepoint * 16777619u) ^
+                               (codepoint * 2166136261u));
+        KerningLookupCacheEntry &entry = cache[hash & (FAST_KERNING_CACHE_SIZE - 1)];
+        if (entry.font == font && entry.left == prevCodepoint && entry.right == codepoint)
+            return (entry.adjust * (1.0f / 256.0f)) * sizePx;
+
         const KerningPair *pairs = (const KerningPair *)font->kerningPairs;
         int lo = 0;
         int hi = (int)font->kerningPairCount - 1;
@@ -206,12 +281,22 @@ namespace pipgui
             const int mid = (lo + hi) >> 1;
             const KerningPair &pair = pairs[mid];
             if (pair.left == prevCodepoint && pair.right == codepoint)
+            {
+                entry.font = font;
+                entry.left = prevCodepoint;
+                entry.right = codepoint;
+                entry.adjust = pair.adjust;
                 return pair.unpackAdjust() * sizePx;
+            }
             if (pair.left < prevCodepoint || (pair.left == prevCodepoint && pair.right < codepoint))
                 lo = mid + 1;
             else
                 hi = mid - 1;
         }
+        entry.font = font;
+        entry.left = prevCodepoint;
+        entry.right = codepoint;
+        entry.adjust = 0;
         return 0.0f;
     }
 
@@ -321,6 +406,20 @@ namespace pipgui
         return nullptr;
     }
 
+    static inline const Glyph *findGlyphFast(const FontData *font, uint32_t cp)
+    {
+        if (!font)
+            return nullptr;
+        if (cp < FAST_GLYPH_ASCII_LIMIT)
+            return glyphLookupCacheFor(font).ascii[cp];
+        return findGlyph(font, cp);
+    }
+
+    static inline const Glyph *fallbackGlyphFor(const FontData *font)
+    {
+        return font ? glyphLookupCacheFor(font).fallback : nullptr;
+    }
+
     static inline float spaceWidth(const FontData *font)
     {
         static const FontData *s_font = nullptr;
@@ -328,7 +427,7 @@ namespace pipgui
         if (font == s_font)
             return s_cached;
         s_font = font;
-        const Glyph *glyph = findGlyph(font, (uint32_t)'n');
+        const Glyph *glyph = findGlyphFast(font, (uint32_t)'n');
         s_cached = glyph ? glyph->unpackAdvance() * 0.5f : 0.30f;
         return s_cached;
     }
@@ -336,13 +435,11 @@ namespace pipgui
     template <typename Fn>
     static inline bool forEachGlyph(const char *s, int len, const FontData *font, float sizePx, uint16_t weight, Fn &&callback)
     {
-        static const FontData *s_cachedFont = nullptr;
-        static uint32_t s_cachedCodepoint = 0;
-        static const Glyph *s_cachedGlyph = nullptr;
-
         const float spaceAdvance = spaceWidth(font) * sizePx;
         const float lineAdvance = font->lineHeight * sizePx;
         const float trackingAdvance = fontTrackingPx(font, sizePx) + weightTrackingAdjustPx(weight, sizePx);
+        const float baselineY = font->ascender * sizePx;
+        const Glyph *fallbackGlyph = fallbackGlyphFor(font);
         float penX = 0.0f;
         float penY = 0.0f;
         uint32_t prevCodepoint = 0;
@@ -354,7 +451,7 @@ namespace pipgui
                 continue;
             if (codepoint == '\n')
             {
-                if (!callback(nullptr, penX, penY + font->ascender * sizePx, true))
+                if (!callback(nullptr, penX, penY + baselineY, true))
                     return false;
                 penX = 0.0f;
                 penY += lineAdvance;
@@ -374,20 +471,9 @@ namespace pipgui
                 continue;
             }
 
-            const Glyph *glyph = nullptr;
-            if (font == s_cachedFont && codepoint == s_cachedCodepoint)
-            {
-                glyph = s_cachedGlyph;
-            }
-            else
-            {
-                glyph = findGlyph(font, codepoint);
-                if (!glyph)
-                    glyph = findGlyph(font, (uint32_t)'?');
-                s_cachedFont = font;
-                s_cachedCodepoint = codepoint;
-                s_cachedGlyph = glyph;
-            }
+            const Glyph *glyph = findGlyphFast(font, codepoint);
+            if (!glyph)
+                glyph = fallbackGlyph;
             if (!glyph)
                 continue;
 
@@ -397,7 +483,7 @@ namespace pipgui
                 penX += fontKerningAdjustPx(font, prevCodepoint, codepoint, sizePx);
             }
 
-            if (!callback(glyph, penX, penY + font->ascender * sizePx, false))
+            if (!callback(glyph, penX, penY + baselineY, false))
                 return false;
             penX += glyph->unpackAdvance() * sizePx;
             prevCodepoint = codepoint;
@@ -493,5 +579,110 @@ namespace pipgui
         out.originX = (int16_t)(-minXI + weightExpandX);
         out.originY = (int16_t)(-minYI + weightExpandY);
         return true;
+    }
+
+    inline constexpr uint8_t TEXT_LAYOUT_CACHE_MAX = 16;
+
+    struct TextLayoutCacheEntry
+    {
+        uint32_t hash = 0;
+        uint32_t lastUse = 0;
+        const FontData *font = nullptr;
+        uint16_t sizePx = 0;
+        uint16_t weight = 0;
+        bool used = false;
+        TextLayoutBox box{};
+        String text;
+    };
+
+    static inline uint32_t hashTextLayoutKey(const char *s, size_t len,
+                                             const FontData *font,
+                                             uint16_t sizePx,
+                                             uint16_t weight) noexcept
+    {
+        uint32_t hash = 2166136261u;
+        auto mix = [&](uint32_t value)
+        {
+            hash ^= value;
+            hash *= 16777619u;
+        };
+
+        mix((uint32_t)(((uintptr_t)font >> 4) & 0xFFFFFFFFu));
+        mix(sizePx);
+        mix(weight);
+        mix((uint32_t)len);
+        for (size_t i = 0; i < len; ++i)
+            mix((uint8_t)s[i]);
+        return hash ? hash : 1u;
+    }
+
+    static inline bool resolveTextLayoutBoxCached(const String &text,
+                                                  const FontData *font,
+                                                  uint16_t sizePx,
+                                                  uint16_t weight,
+                                                  TextLayoutBox &out)
+    {
+        out = {};
+        if (!font)
+            return false;
+
+        const size_t len = text.length();
+        if (len == 0)
+            return true;
+
+        static TextLayoutCacheEntry cache[TEXT_LAYOUT_CACHE_MAX]{};
+        static uint32_t tick = 0;
+        const uint32_t now = ++tick;
+        const uint32_t hash = hashTextLayoutKey(text.c_str(), len, font, sizePx, weight);
+
+        TextLayoutCacheEntry *best = &cache[0];
+        for (TextLayoutCacheEntry &entry : cache)
+        {
+            if (entry.used &&
+                entry.hash == hash &&
+                entry.font == font &&
+                entry.sizePx == sizePx &&
+                entry.weight == weight &&
+                entry.text == text)
+            {
+                entry.lastUse = now;
+                out = entry.box;
+                return true;
+            }
+            if (!entry.used)
+            {
+                best = &entry;
+                break;
+            }
+            if (best->used && entry.lastUse < best->lastUse)
+                best = &entry;
+        }
+
+        if (!computeTextLayoutBox(text.c_str(), (int)len, font, sizePx, weight, out))
+            return false;
+
+        best->used = true;
+        best->hash = hash;
+        best->lastUse = now;
+        best->font = font;
+        best->sizePx = sizePx;
+        best->weight = weight;
+        best->box = out;
+        best->text = text;
+        return true;
+    }
+
+    static inline void resolveTextAlignedOrigin(int16_t x, int16_t y,
+                                                int16_t width, int16_t height,
+                                                TextAlign align,
+                                                int16_t &outX, int16_t &outY)
+    {
+        outX = x;
+        if (align == TextAlign::Center)
+            outX -= (width + 1) / 2;
+        else if (align == TextAlign::Right)
+            outX -= width;
+        outY = y;
+        (void)height;
     }
 }

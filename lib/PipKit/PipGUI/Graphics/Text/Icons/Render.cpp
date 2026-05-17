@@ -1,10 +1,14 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Core/Internal/GuiAccess.hpp>
-#include <PipGUI/Graphics/Utils/Colors.hpp>
+
 #include <PipGUI/Graphics/Draw/Blend.hpp>
-#include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+
 #include <PipGUI/Graphics/Text/Icons/AnimMetrics.hpp>
-#include <math.h>
+#include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+
+#include <PipGUI/Graphics/Utils/Colors.hpp>
+
+#include <cmath>
 
 namespace pipgui
 {
@@ -109,14 +113,13 @@ namespace pipgui
                 const int32_t a11 = (int32_t)plat->readProgmemByte(row1 + x1);
                 const int32_t a0 = (a00 << 16) + (a10 - a00) * (int32_t)fx;
                 const int32_t a1 = (a01 << 16) + (a11 - a01) * (int32_t)fx;
-                int32_t alpha = ((a0 + (int32_t)(((int64_t)(a1 - a0) * fy) >> 16)) + 0x8000) >> 16;
+                int32_t alpha = ((a0 + static_cast<int32_t>(((a1 - a0) * static_cast<int32_t>(fy)) >> 16)) + 0x8000) >> 16;
                 if (alpha < 0)
                     alpha = 0;
                 else if (alpha > 255)
                     alpha = 255;
                 return (uint8_t)alpha;
             }
-
         };
 
         static inline IconRowSampler makeIconRowSampler(pipcore::Platform *plat,
@@ -287,6 +290,7 @@ namespace pipgui
 
         const int16_t rx = (x == -1) ? AutoX((int32_t)sizePx) : x;
         const int16_t ry = (y == -1) ? AutoY((int32_t)sizePx) : y;
+        debugRecordLayoutRectGlobal(rx, ry, (int16_t)sizePx, (int16_t)sizePx);
         const int16_t rxS = (int16_t)(rx - _render.originX);
         const int16_t ryS = (int16_t)(ry - _render.originY);
 
@@ -332,17 +336,36 @@ namespace pipgui
             const IconRowSampler rowSampler = makeIconRowSampler(plat, icons, vFP, atlasW, atlasH);
             int32_t uFP = u0FP;
             uint16_t *dst = buf + (int32_t)py * stride + ix0;
+            int16_t runStart = -1;
 
             for (int16_t px = ix0; px < ix1; ++px, ++dst, uFP += duFP)
             {
                 const uint8_t s8 = rowSampler.sample(uFP);
                 if (s8 <= s8Min)
+                {
+                    if (runStart >= 0)
+                    {
+                        debugRecordPaintSpanLocal(runStart, py, (int16_t)(px - runStart));
+                        runStart = -1;
+                    }
                     continue;
+                }
 
                 const uint8_t alpha = alphaLut.values[s8];
                 if (alpha)
+                {
                     blendNative565(dst, fg, alpha);
+                    if (runStart < 0)
+                        runStart = px;
+                }
+                else if (runStart >= 0)
+                {
+                    debugRecordPaintSpanLocal(runStart, py, (int16_t)(px - runStart));
+                    runStart = -1;
+                }
             }
+            if (runStart >= 0)
+                debugRecordPaintSpanLocal(runStart, py, (int16_t)(ix1 - runStart));
         }
     }
 
@@ -409,6 +432,7 @@ namespace pipgui
 
         const int16_t rx = (x == -1) ? AutoX((int32_t)sizePx) : x;
         const int16_t ry = (y == -1) ? AutoY((int32_t)sizePx) : y;
+        debugRecordLayoutRectGlobal(rx, ry, (int16_t)sizePx, (int16_t)sizePx);
 
         const float box = (float)sizePx;
         const float scale = box / (float)((icon.width > icon.height) ? icon.width : icon.height);
@@ -431,6 +455,7 @@ namespace pipgui
         const float drawH = (float)icon.height * scale;
         const float drawX = (float)(rx - _render.originX) + (box - drawW) * 0.5f;
         const float drawY = (float)(ry - _render.originY) + (box - drawH) * 0.5f;
+        const Affine2D compToScreen = multiplyAffine(translation(drawX, drawY), scaling(scale, scale));
         const NativeColor565 fg = makeNativeColor565(fg565);
         pipcore::Platform *const plat = platform();
         const uint32_t atlasW = (uint32_t)psdf_anim::AtlasWidth;
@@ -446,7 +471,6 @@ namespace pipgui
             if (frame.opacity == 0)
                 continue;
 
-            const Affine2D compToScreen = multiplyAffine(translation(drawX, drawY), scaling(scale, scale));
             const Affine2D layerTransform = multiplyAffine(
                 translation(frame.posX, frame.posY),
                 multiplyAffine(
@@ -493,29 +517,83 @@ namespace pipgui
             const float kOffset = 0.5f - distanceScale * 0.5f;
             const AlphaLut &alphaLut = alphaLutFor(kScale, kOffset);
             const uint8_t s8Min = alphaLut.firstNonZero;
+            const float sxStepX = inverse.m00;
+            const float syStepX = inverse.m10;
+            const float sxStepY = inverse.m01;
+            const float syStepY = inverse.m11;
+            const float rowStartPy = (float)iy0 + 0.5f;
+            const float px0Center = (float)ix0 + 0.5f;
+            float rowSx = inverse.m00 * px0Center + inverse.m01 * rowStartPy + inverse.m02;
+            float rowSy = inverse.m10 * px0Center + inverse.m11 * rowStartPy + inverse.m12;
+            const float uScale = (float)glyph.w / (float)icon.width;
+            const float vScale = (float)glyph.h / (float)icon.height;
+            const float uBias = (float)glyph.x - 0.5f;
+            const float vBias = (float)glyph.y - 0.5f;
+            const float uStepX = sxStepX * uScale;
+            const float vStepX = syStepX * vScale;
 
             for (int16_t py = iy0; py < iy1; ++py)
             {
                 uint16_t *dst = buf + (int32_t)py * stride + ix0;
+                int16_t runStart = -1;
+                float sx = rowSx;
+                float sy = rowSy;
+                float u = sx * uScale + uBias;
+                float v = sy * vScale + vBias;
                 for (int16_t px = ix0; px < ix1; ++px, ++dst)
                 {
-                    const float sx = inverse.m00 * ((float)px + 0.5f) + inverse.m01 * ((float)py + 0.5f) + inverse.m02;
-                    const float sy = inverse.m10 * ((float)px + 0.5f) + inverse.m11 * ((float)py + 0.5f) + inverse.m12;
                     if (sx < 0.0f || sy < 0.0f || sx > (float)icon.width || sy > (float)icon.height)
+                    {
+                        if (runStart >= 0)
+                        {
+                            debugRecordPaintSpanLocal(runStart, py, (int16_t)(px - runStart));
+                            runStart = -1;
+                        }
+                        sx += sxStepX;
+                        sy += syStepX;
+                        u += uStepX;
+                        v += vStepX;
                         continue;
+                    }
 
-                    const float u = ((sx / (float)icon.width) * (float)glyph.w) + (float)glyph.x - 0.5f;
-                    const float v = ((sy / (float)icon.height) * (float)glyph.h) + (float)glyph.y - 0.5f;
                     const IconRowSampler rowSampler = makeIconRowSampler(plat, animIcons, (int32_t)(v * 65536.0f), atlasW, atlasH);
                     const uint8_t s8 = rowSampler.sample((int32_t)(u * 65536.0f));
                     if (s8 <= s8Min)
+                    {
+                        if (runStart >= 0)
+                        {
+                            debugRecordPaintSpanLocal(runStart, py, (int16_t)(px - runStart));
+                            runStart = -1;
+                        }
+                        sx += sxStepX;
+                        sy += syStepX;
+                        u += uStepX;
+                        v += vStepX;
                         continue;
+                    }
 
                     uint16_t alpha = alphaLut.values[s8];
                     alpha = (uint16_t)((alpha * frame.opacity + 127U) / 255U);
                     if (alpha)
+                    {
                         blendNative565(dst, fg, (uint8_t)alpha);
+                        if (runStart < 0)
+                            runStart = px;
+                    }
+                    else if (runStart >= 0)
+                    {
+                        debugRecordPaintSpanLocal(runStart, py, (int16_t)(px - runStart));
+                        runStart = -1;
+                    }
+                    sx += sxStepX;
+                    sy += syStepX;
+                    u += uStepX;
+                    v += vStepX;
                 }
+                if (runStart >= 0)
+                    debugRecordPaintSpanLocal(runStart, py, (int16_t)(ix1 - runStart));
+                rowSx += sxStepY;
+                rowSy += syStepY;
             }
         }
     }

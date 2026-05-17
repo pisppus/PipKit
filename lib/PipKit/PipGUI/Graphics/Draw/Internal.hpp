@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Blend.hpp"
+
 #include <PipGUI/Core/GUI.hpp>
 #include <PipCore/Graphics/Sprite.hpp>
-#include <math.h>
-#include "Blend.hpp"
+
+#include <cmath>
 
 namespace pipgui
 {
@@ -138,6 +140,15 @@ namespace pipgui
         return (d256 < 256u) ? curve[d256] : 0;
     }
 
+    static __attribute__((always_inline)) inline uint8_t fracAlphaFromResidual(uint32_t rem, uint32_t den)
+    {
+        if (rem == 0 || den == 0)
+            return 0;
+        if (rem >= den)
+            return 255;
+        return (uint8_t)(((rem * 255u) + (den >> 1)) / den);
+    }
+
     static __attribute__((always_inline)) inline uint8_t fracAlphaFromResidual(int64_t rem, int64_t den)
     {
         if (rem <= 0 || den <= 0)
@@ -145,6 +156,15 @@ namespace pipgui
         if (rem >= den)
             return 255;
         return (uint8_t)((rem * 255 + (den >> 1)) / den);
+    }
+
+    static __attribute__((always_inline)) inline uint8_t fracAlphaFromResidual(uint64_t rem, uint64_t den)
+    {
+        if (rem == 0 || den == 0)
+            return 0;
+        if (rem >= den)
+            return 255;
+        return (uint8_t)(((rem * 255ull) + (den >> 1)) / den);
     }
 
     template <typename AccT>
@@ -188,8 +208,8 @@ namespace pipgui
             }
 
             const int16_t ySpan = (int16_t)yi;
-            const uint8_t ag = gamma[fracAlphaFromResidual((int64_t)(r4 - (x4 + yi4)),
-                                                           (int64_t)pow4StepUp<AccT>((uint32_t)ySpan))];
+            const uint8_t ag = gamma[fracAlphaFromResidual(r4 - (x4 + yi4),
+                                                           pow4StepUp<AccT>((uint32_t)ySpan))];
             const int16_t pxL = cx - dx;
             const int16_t pxR = cx + dx;
 
@@ -221,8 +241,8 @@ namespace pipgui
             }
 
             const int16_t xSpan = (int16_t)xi;
-            const uint8_t ag = gamma[fracAlphaFromResidual((int64_t)(r4 - (xi4 + y4)),
-                                                           (int64_t)pow4StepUp<AccT>((uint32_t)xSpan))];
+            const uint8_t ag = gamma[fracAlphaFromResidual(r4 - (xi4 + y4),
+                                                           pow4StepUp<AccT>((uint32_t)xSpan))];
             const int16_t pyT = cy - dy;
             const int16_t pyB = cy + dy;
             const int16_t pxL = cx - xSpan - 1;
@@ -258,8 +278,8 @@ namespace pipgui
             }
 
             const int16_t yEdge = (int16_t)yi;
-            const uint8_t frac = fracAlphaFromResidual((int64_t)(r4 - (x4 + yi4)),
-                                                       (int64_t)pow4StepUp<AccT>((uint32_t)yEdge));
+            const uint8_t frac = fracAlphaFromResidual(r4 - (x4 + yi4),
+                                                       pow4StepUp<AccT>((uint32_t)yEdge));
             const uint8_t a0 = gamma[255 - frac];
             const uint8_t a1 = gamma[frac];
             const int16_t pxL = cx - dx;
@@ -298,8 +318,8 @@ namespace pipgui
             }
 
             const int16_t xEdge = (int16_t)xi;
-            const uint8_t frac = fracAlphaFromResidual((int64_t)(r4 - (xi4 + y4)),
-                                                       (int64_t)pow4StepUp<AccT>((uint32_t)xEdge));
+            const uint8_t frac = fracAlphaFromResidual(r4 - (xi4 + y4),
+                                                       pow4StepUp<AccT>((uint32_t)xEdge));
             const uint8_t a0 = gamma[255 - frac];
             const uint8_t a1 = gamma[frac];
             const int16_t pyT = cy - dy;

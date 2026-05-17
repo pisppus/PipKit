@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <math.h>
 #include <PipKit.hpp>
+#include <PipGUI/Core/Config/Version.hpp>
 #include <PipGUI/Systems/Network/Wifi.hpp>
 #include <PipGUI/Systems/Update/Ota.hpp>
 
@@ -16,15 +17,15 @@ namespace
   constexpr uint8_t kBlurRectCount = 3;
 
 #ifndef PIPGUI_DEMO_BTN_NEXT_PIN
-#define PIPGUI_DEMO_BTN_NEXT_PIN 20
+#define PIPGUI_DEMO_BTN_NEXT_PIN 9
 #endif
 
 #ifndef PIPGUI_DEMO_BTN_PREV_PIN
-#define PIPGUI_DEMO_BTN_PREV_PIN 4
+#define PIPGUI_DEMO_BTN_PREV_PIN 16
 #endif
 
 #ifndef PIPGUI_DEMO_BTN_SELECT_PIN
-#define PIPGUI_DEMO_BTN_SELECT_PIN 21
+#define PIPGUI_DEMO_BTN_SELECT_PIN -1
 #endif
 
 // Set to 255 to disable backlight pin control in the demo.
@@ -37,18 +38,24 @@ namespace
 #define PIPGUI_DEMO_ADAPTIVE_PREVIEW 0
 #endif
 
-  constexpr uint8_t kBtnNextPin = (uint8_t)PIPGUI_DEMO_BTN_NEXT_PIN;
-  constexpr uint8_t kBtnPrevPin = (uint8_t)PIPGUI_DEMO_BTN_PREV_PIN;
-  constexpr uint8_t kBtnSelectPin = (uint8_t)PIPGUI_DEMO_BTN_SELECT_PIN;
+  constexpr int16_t kBtnNextPinRaw = PIPGUI_DEMO_BTN_NEXT_PIN;
+  constexpr int16_t kBtnPrevPinRaw = PIPGUI_DEMO_BTN_PREV_PIN;
+  constexpr int16_t kBtnSelectPinRaw = PIPGUI_DEMO_BTN_SELECT_PIN;
+  constexpr bool kHasSelectButton = kBtnSelectPinRaw >= 0;
+
+  constexpr uint8_t kBtnNextPin = (uint8_t)kBtnNextPinRaw;
+  constexpr uint8_t kBtnPrevPin = (uint8_t)kBtnPrevPinRaw;
+  constexpr uint8_t kBtnSelectPin = kHasSelectButton ? (uint8_t)kBtnSelectPinRaw : 0;
   constexpr uint8_t kBacklightPin = (uint8_t)PIPGUI_DEMO_BACKLIGHT_PIN;
   constexpr uint16_t kAdaptivePreviewMinW = 240;
   constexpr uint16_t kAdaptivePreviewMinH = 135;
   constexpr uint32_t kAdaptivePreviewCycleMs = 7200;
 
+  static_assert(kBtnNextPinRaw >= 0 && kBtnPrevPinRaw >= 0, "Next/Prev button pins must be valid");
   static_assert(kBtnNextPin != kBtnPrevPin, "Buttons must be on different pins");
-  static_assert(kBtnNextPin != kBtnSelectPin, "Buttons must be on different pins");
-  static_assert(kBtnPrevPin != kBtnSelectPin, "Buttons must be on different pins");
-  static_assert(kBacklightPin == 255 || (kBacklightPin != kBtnNextPin && kBacklightPin != kBtnPrevPin && kBacklightPin != kBtnSelectPin),
+  static_assert(!kHasSelectButton || kBtnNextPin != kBtnSelectPin, "Buttons must be on different pins");
+  static_assert(!kHasSelectButton || kBtnPrevPin != kBtnSelectPin, "Buttons must be on different pins");
+  static_assert(kBacklightPin == 255 || (kBacklightPin != kBtnNextPin && kBacklightPin != kBtnPrevPin && (!kHasSelectButton || kBacklightPin != kBtnSelectPin)),
                 "Backlight pin conflicts with a button pin");
 
   struct BlurRect
@@ -176,10 +183,7 @@ namespace
 
   String fwVersionText()
   {
-    const uint32_t maj = (uint32_t)PIPGUI_FIRMWARE_VER_MAJOR;
-    const uint32_t min = (uint32_t)PIPGUI_FIRMWARE_VER_MINOR;
-    const uint32_t pat = (uint32_t)PIPGUI_FIRMWARE_VER_PATCH;
-    return String(maj) + "." + String(min) + "." + String(pat);
+    return String(pipgui::config::firmwareVersionText());
   }
 
   const char *otaErrorName(OtaError e)
@@ -422,8 +426,8 @@ void setup()
 #endif
 
   ui.configDisplay()
-      .pins({11, 12, 10, 9, 14})
-      .size(320, 480);
+      .pins({6, 5, 7, 8, -1})
+      .size(240, 320);
 
   ui.begin(3, true); // force tiled rendering (2 horizontal tiles) for testing
 #if (PIPGUI_DEMO_ADAPTIVE_PREVIEW != 0)
@@ -446,7 +450,8 @@ void setup()
 
   btnNext.begin();
   btnPrev.begin();
-  btnSelect.begin();
+  if (kHasSelectButton)
+    btnSelect.begin();
   runBootAnimation(ui, FadeIn, "PISPPUS", "Fade in");
 
   ui.setScreen(listMenu);
@@ -456,7 +461,9 @@ void loop()
 {
   serviceSerialRotation();
 
-  const auto input = ui.pollInput(btnNext, btnPrev, btnSelect);
+  const auto input = kHasSelectButton
+                         ? ui.pollInput(btnNext, btnPrev, btnSelect)
+                         : ui.pollInput(btnNext, btnPrev);
   const uint32_t nowMs = millis();
   const bool nextPressed = input.nextPressed;
   const bool prevPressed = input.prevPressed;

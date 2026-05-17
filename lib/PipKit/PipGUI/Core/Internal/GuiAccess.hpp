@@ -180,6 +180,24 @@ namespace pipgui
                 gui.drawLineCore(x0, y0, x1, y1, thickness, color, roundStart, roundEnd, false);
             }
 
+            static void getClipState(GUI &gui, bool &enabled, int16_t &x, int16_t &y, int16_t &w, int16_t &h)
+            {
+                enabled = gui._clip.enabled;
+                x = gui._clip.x;
+                y = gui._clip.y;
+                w = gui._clip.w;
+                h = gui._clip.h;
+            }
+
+            static void restoreClipState(GUI &gui, bool enabled, int16_t x, int16_t y, int16_t w, int16_t h)
+            {
+                gui._clip.enabled = enabled;
+                gui._clip.x = x;
+                gui._clip.y = y;
+                gui._clip.w = w;
+                gui._clip.h = h;
+            }
+
             static void fillRectGradientVertical(GUI &gui,
                                                  int16_t x,
                                                  int16_t y,

@@ -76,14 +76,14 @@ build_flags =
 Запуск:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\sim-run.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1
 ```
 
 Полезные варианты:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\sim-run.ps1 -Debug
-powershell -ExecutionPolicy Bypass -File .\tools\sim-run.ps1 -NoRun
+powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -Debug
+powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -NoRun
 ```
 
 Что делает script:
@@ -131,8 +131,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\sim-run.ps1 -NoRun
 #define PIPGUI_SIM_SCALE 2
 #define PIPGUI_SIM_DEFAULT_WIDTH 320
 #define PIPGUI_SIM_DEFAULT_HEIGHT 240
-#define PIPGUI_SIM_BTN_PREV_PIN 4
-#define PIPGUI_SIM_BTN_NEXT_PIN 20
+#define PIPGUI_SIM_BTN_PREV_PIN 16
+#define PIPGUI_SIM_BTN_NEXT_PIN 9
 #define PIPGUI_SIM_BTN_SELECT_PIN 21
 ```
 
@@ -160,13 +160,6 @@ Desktop simulator сейчас состоит из трёх частей:
 - `PipCore/Platforms/Desktop` - desktop platform/runtime backend
 - `PipCore/Displays/Simulator` - display driver, который рисует framebuffer в desktop runtime
 - `PipCore/Host/Desktop` - host-обвязка для запуска Arduino-style app на ПК
-
-Что лежит в `PipCore/Host/Desktop`:
-
-- `include/Compat.hpp` - основной desktop compat-layer для Arduino-style API (`String`, `Serial`, `millis()`, `delay()` и т.д.)
-- `include/Arduino.h` - тонкий wrapper для совместимости с обычным `#include <Arduino.h>`
-- `src/Globals.cpp` - desktop-глобалы compat-layer (`Serial`, `ESP`)
-- `src/Runner.cpp` - desktop entrypoint, который вызывает `setup()` и потом крутит `loop()`
 
 ## 2.4. Что нужно проекту для симуляции
 
@@ -2037,10 +2030,8 @@ python tools/ota/verify.py
 #define PIPGUI_OTA_PROJECT_URL "https://example.com/fw/pipGUI"
 #define PIPGUI_OTA_ED25519_PUBKEY_HEX "..."
 
-#define PIPGUI_FIRMWARE_TITLE "PipGUI"
-#define PIPGUI_FIRMWARE_VER_MAJOR 1
-#define PIPGUI_FIRMWARE_VER_MINOR 0
-#define PIPGUI_FIRMWARE_VER_PATCH 2
+#define PIPGUI_FIRMWARE_TITLE "PipKit"
+#define PIPGUI_FIRMWARE_VERSION "1.6.1"
 ```
 
 Что это значит:
@@ -2052,7 +2043,7 @@ python tools/ota/verify.py
 - `PIPGUI_OTA_PROJECT_URL` это базовый URL проекта, откуда берутся manifest и бинарники
 - `PIPGUI_OTA_ED25519_PUBKEY_HEX` это публичный ключ, которым проверяется подпись manifest и firmware
 - `PIPGUI_FIRMWARE_TITLE` это имя прошивки в UI
-- `PIPGUI_FIRMWARE_VER_MAJOR / MINOR / PATCH` это текущая версия прошивки, с которой backend сравнивает remote release
+- `PIPGUI_FIRMWARE_VERSION` это текущая версия прошивки в формате `"major.minor.patch"`
 
 Что обычно важно:
 
@@ -2103,7 +2094,7 @@ bool ready = ui.otaStableListReady();         // список уже загру�
 uint8_t count = ui.otaStableListCount();      // сколько stable-версий доступно
 const char* ver = ui.otaStableListVersion(i); // строка версии по индексу
 
-ui.otaRequestInstallStableVersion("1.2.3");
+ui.otaRequestInstallStableVersion("1.6.1");
 ```
 
 Это нужно только если хочешь показывать пользователю список старых stable-сборок и давать выбрать rollback вручную.

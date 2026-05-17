@@ -1,5 +1,6 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Graphics/Utils/Easing.hpp>
+
 #include <math.h>
 
 namespace pipgui
@@ -358,8 +359,7 @@ namespace pipgui
                                               .size(rw, rh)
                                               .fill(bg565)
                                               .draw();
-                                          drawScrollDotsImpl(x, y, count, activeIndex, activeColor, inactiveColor, radius, spacing);
-                                      });
+                                          drawScrollDotsImpl(x, y, count, activeIndex, activeColor, inactiveColor, radius, spacing); });
             return;
         }
 

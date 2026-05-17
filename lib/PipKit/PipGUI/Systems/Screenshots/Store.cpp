@@ -1,8 +1,11 @@
 #include <PipGUI/Systems/Screenshots/Internals.hpp>
 #include <PipGUI/Systems/Screenshots/Codec.hpp>
+
 #include <PipGUI/Graphics/Utils/Colors.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
+
 #include <algorithm>
+
 #include <cstdio>
 #include <cstring>
 
@@ -11,7 +14,7 @@ namespace pipgui
     namespace ssd = screenshots::detail;
 
 #if (PIPGUI_SCREENSHOT_MODE == 2)
-    [[nodiscard]] static bool writeThumbFile(fs::File &tf, const uint16_t *src565, uint16_t w, uint16_t h) noexcept
+    [[nodiscard]] static bool writeThumbFile(pipcore::storage::File &tf, const uint16_t *src565, uint16_t w, uint16_t h) noexcept
     {
         if (!tf || !src565 || w == 0 || h == 0)
             return false;
@@ -129,7 +132,7 @@ namespace pipgui
 
         if (!_shots.fsReady)
         {
-            _shots.fsReady = LittleFS.begin(false);
+            _shots.fsReady = pipcore::storage::begin(false);
             _shots.fsDirsReady = false;
             if (!_shots.fsReady)
             {
@@ -185,7 +188,7 @@ namespace pipgui
             {
                 _flags.needRedraw = 1;
                 clearGalleryCache(_shots, platform());
-                _shots.scanDir = LittleFS.open(ssd::kShotsDir);
+                _shots.scanDir = pipcore::storage::open(ssd::kShotsDir);
                 if (!_shots.scanDir)
                 {
                     _shots.flashScanDone = true;
@@ -198,7 +201,7 @@ namespace pipgui
             const uint32_t t0 = micros();
             while ((micros() - t0) < 1500)
             {
-                fs::File file = _shots.scanDir.openNextFile();
+                pipcore::storage::File file = _shots.scanDir.openNextFile();
                 if (!file)
                 {
                     _shots.scanDir.close();
@@ -224,7 +227,7 @@ namespace pipgui
                     storeShotPath(tmpFull, sizeof(tmpFull), base);
                     file.close();
                     if (tmpFull[0] != '\0')
-                        LittleFS.remove(tmpFull);
+                        (void)pipcore::storage::remove(tmpFull);
                     continue;
                 }
                 if (!ssd::hasSuffix(base, ".pscr"))
@@ -290,7 +293,7 @@ namespace pipgui
         {
             const char *p = _shots.entries[_shots.flashLoadIndex].path;
             if (p && p[0])
-                LittleFS.remove(p);
+                (void)pipcore::storage::remove(p);
             dropEntry();
         };
 
@@ -315,8 +318,8 @@ namespace pipgui
 
             char tdir[64];
             ssd::thumbDir(tdir, sizeof(tdir), tw, th);
-            LittleFS.mkdir(tdir);
-            fs::File d = LittleFS.open(tdir);
+            (void)pipcore::storage::mkdir(tdir);
+            pipcore::storage::File d = pipcore::storage::open(tdir);
             if (!d || !d.isDirectory())
             {
                 if (d)
@@ -327,7 +330,7 @@ namespace pipgui
             uint8_t remaining = _shots.count;
             while (remaining)
             {
-                fs::File f = d.openNextFile();
+                pipcore::storage::File f = d.openNextFile();
                 if (!f)
                     break;
                 if (f.isDirectory())
@@ -365,7 +368,7 @@ namespace pipgui
         {
             if (entry.thumbOnFlash)
             {
-                fs::File tf = LittleFS.open(thumbPath, FILE_READ);
+                pipcore::storage::File tf = pipcore::storage::open(thumbPath, pipcore::storage::OpenMode::Read);
                 if (tf)
                 {
                     bool removeThumb = false;
@@ -423,7 +426,7 @@ namespace pipgui
                     if (removeThumb)
                     {
                         entry.thumbOnFlash = false;
-                        LittleFS.remove(thumbPath);
+                        (void)pipcore::storage::remove(thumbPath);
                     }
                 }
                 else
@@ -433,7 +436,7 @@ namespace pipgui
             }
         }
 
-        fs::File file = LittleFS.open(entry.path, FILE_READ);
+        pipcore::storage::File file = pipcore::storage::open(entry.path, pipcore::storage::OpenMode::Read);
         if (!file)
         {
             dropEntry();
@@ -687,12 +690,12 @@ namespace pipgui
             {
                 char tdir[64];
                 ssd::thumbDir(tdir, sizeof(tdir), tw, th);
-                LittleFS.mkdir(tdir);
+                (void)pipcore::storage::mkdir(tdir);
 
                 char thumbTmp[96];
                 const bool haveTmp = ssd::tmpPathFromFinal(thumbTmp, sizeof(thumbTmp), thumbPath);
 
-                fs::File tf = LittleFS.open(haveTmp ? thumbTmp : thumbPath, FILE_WRITE);
+                pipcore::storage::File tf = pipcore::storage::open(haveTmp ? thumbTmp : thumbPath, pipcore::storage::OpenMode::Write);
                 if (tf)
                 {
                     bool wroteOk = writeThumbFile(tf, dst, tw, th);
@@ -702,13 +705,13 @@ namespace pipgui
                     {
                         if (wroteOk)
                         {
-                            wroteOk = LittleFS.rename(thumbTmp, thumbPath);
+                            wroteOk = pipcore::storage::rename(thumbTmp, thumbPath);
                             if (!wroteOk)
-                                LittleFS.remove(thumbTmp);
+                                (void)pipcore::storage::remove(thumbTmp);
                         }
                         else
                         {
-                            LittleFS.remove(thumbTmp);
+                            (void)pipcore::storage::remove(thumbTmp);
                         }
                     }
 

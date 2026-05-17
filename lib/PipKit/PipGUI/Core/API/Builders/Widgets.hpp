@@ -36,8 +36,7 @@ namespace pipgui
 
         ToggleSwitchFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -45,8 +44,7 @@ namespace pipgui
 
         ToggleSwitchFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -54,16 +52,14 @@ namespace pipgui
 
         ToggleSwitchFluentT &value(bool &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _value = &v;
             return *this;
         }
 
         ToggleSwitchFluentT &pressed(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _pressed = v;
             _pressedSet = true;
             return *this;
@@ -71,8 +67,7 @@ namespace pipgui
 
         ToggleSwitchFluentT &enabled(bool v = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _enabled = v;
             _enabledSet = true;
             return *this;
@@ -80,32 +75,28 @@ namespace pipgui
 
         ToggleSwitchFluentT &changed(bool &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _changed = &v;
             return *this;
         }
 
         ToggleSwitchFluentT &activeColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _activeColor = c;
             return *this;
         }
 
         ToggleSwitchFluentT &inactiveColor(int32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_inactiveColor, c);
             return *this;
         }
 
         ToggleSwitchFluentT &knobColor(int32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_knobColor, c);
             return *this;
         }
@@ -152,16 +143,14 @@ namespace pipgui
 
         ButtonFluentT &label(const String &t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _label = t;
             return *this;
         }
 
         ButtonFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -169,8 +158,7 @@ namespace pipgui
 
         ButtonFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -178,24 +166,21 @@ namespace pipgui
 
         ButtonFluentT &baseColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _baseColor = c;
             return *this;
         }
 
         ButtonFluentT &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
 
         ButtonFluentT &value(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _progressValue = v;
             _showProgress = true;
             return *this;
@@ -203,24 +188,21 @@ namespace pipgui
 
         ButtonFluentT &fillColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             return *this;
         }
 
         ButtonFluentT &icon(IconId id)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = id;
             return *this;
         }
 
         ButtonFluentT &mode(bool enabled = true, bool loading = false)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _enabled = enabled;
             _loading = loading;
             _modeSet = true;
@@ -229,8 +211,7 @@ namespace pipgui
 
         ButtonFluentT &down(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _down = v;
             _downSet = true;
             return *this;
@@ -267,8 +248,7 @@ namespace pipgui
 
         SliderFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -276,8 +256,7 @@ namespace pipgui
 
         SliderFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -285,16 +264,14 @@ namespace pipgui
 
         SliderFluentT &bind(int16_t &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _value = &v;
             return *this;
         }
 
         SliderFluentT &enabled(bool v = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _enabled = v;
             _enabledSet = true;
             return *this;
@@ -302,24 +279,21 @@ namespace pipgui
 
         SliderFluentT &activeColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _activeColor = c;
             return *this;
         }
 
         SliderFluentT &inactiveColor(int32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_inactiveColor, c);
             return *this;
         }
 
         SliderFluentT &thumbColor(int32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_thumbColor, c);
             return *this;
         }
@@ -371,8 +345,7 @@ namespace pipgui
 
         ProgressFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -380,8 +353,7 @@ namespace pipgui
 
         ProgressFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -389,48 +361,42 @@ namespace pipgui
 
         ProgressFluentT &value(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _value = v;
             return *this;
         }
 
         ProgressFluentT &baseColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _baseColor = c;
             return *this;
         }
 
         ProgressFluentT &fillColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             return *this;
         }
 
         ProgressFluentT &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
 
         ProgressFluentT &anim(ProgressAnim a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _anim = a;
             return *this;
         }
 
         ProgressFluentT &label(const String &text, TextAlign align = Left)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _label = text;
             _labelAlign = align;
             _showLabel = text.length() > 0;
@@ -439,24 +405,21 @@ namespace pipgui
 
         ProgressFluentT &labelColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _labelColor = c;
             return *this;
         }
 
         ProgressFluentT &labelFont(uint16_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _labelFontPx = px;
             return *this;
         }
 
         ProgressFluentT &percent(TextAlign align = Right)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _showPercent = true;
             _percentAlign = align;
             return *this;
@@ -464,16 +427,14 @@ namespace pipgui
 
         ProgressFluentT &percentColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _percentColor = c;
             return *this;
         }
 
         ProgressFluentT &percentFont(uint16_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _percentFontPx = px;
             return *this;
         }
@@ -509,8 +470,7 @@ namespace pipgui
 
         CircleProgressFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -518,48 +478,42 @@ namespace pipgui
 
         CircleProgressFluentT &radius(int16_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _r = r;
             return *this;
         }
 
         CircleProgressFluentT &thickness(uint8_t t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _thickness = t;
             return *this;
         }
 
         CircleProgressFluentT &value(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _value = v;
             return *this;
         }
 
         CircleProgressFluentT &baseColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _baseColor = c;
             return *this;
         }
 
         CircleProgressFluentT &fillColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             return *this;
         }
 
         CircleProgressFluentT &anim(ProgressAnim a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _anim = a;
             return *this;
         }
@@ -599,8 +553,7 @@ namespace pipgui
 
         DrawDrumRollFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -608,8 +561,7 @@ namespace pipgui
 
         DrawDrumRollFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -618,8 +570,7 @@ namespace pipgui
         template <size_t N>
         DrawDrumRollFluent &options(uint16_t fontPx, const String (&items)[N])
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fontPx = fontPx;
             _options = items;
             _count = static_cast<uint8_t>(N);
@@ -629,8 +580,7 @@ namespace pipgui
         template <size_t N>
         DrawDrumRollFluent &options(uint16_t fontPx, const char *const (&items)[N])
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             static_assert(N <= INLINE_OPTIONS_MAX, "Too many drum roll options");
             _fontPx = fontPx;
             for (size_t i = 0; i < N; ++i)
@@ -643,8 +593,7 @@ namespace pipgui
         template <typename... Args>
         DrawDrumRollFluent &options(uint16_t fontPx, Args &&...items)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             static_assert(sizeof...(Args) > 0, "DrumRoll options require at least one item");
             static_assert(sizeof...(Args) <= INLINE_OPTIONS_MAX, "Too many drum roll options");
             _fontPx = fontPx;
@@ -657,48 +606,42 @@ namespace pipgui
 
         DrawDrumRollFluent &selected(uint8_t index)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _selectedIndex = index;
             return *this;
         }
 
         DrawDrumRollFluent &fgColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fgColor = color;
             return *this;
         }
 
         DrawDrumRollFluent &fgColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fgColor = detail::color565To888(color565);
             return *this;
         }
 
         DrawDrumRollFluent &bgColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = color;
             return *this;
         }
 
         DrawDrumRollFluent &bgColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = detail::color565To888(color565);
             return *this;
         }
 
         DrawDrumRollFluent &vertical(bool enabled = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _vertical = enabled;
             return *this;
         }
@@ -721,51 +664,44 @@ namespace pipgui
         ~ScrollDotsFluentT() { draw(); }
         ScrollDotsFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         ScrollDotsFluentT &count(uint8_t n)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _count = n;
             return *this;
         }
         ScrollDotsFluentT &activeIndex(uint8_t i)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _activeIndex = i;
             return *this;
         }
         ScrollDotsFluentT &activeColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _activeColor = c;
             return *this;
         }
         ScrollDotsFluentT &inactiveColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _inactiveColor = c;
             return *this;
         }
         ScrollDotsFluentT &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
         ScrollDotsFluentT &spacing(uint8_t s)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _spacing = s;
             return *this;
         }
@@ -804,8 +740,7 @@ namespace pipgui
 
         GraphGridFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -813,8 +748,7 @@ namespace pipgui
 
         GraphGridFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -822,64 +756,56 @@ namespace pipgui
 
         GraphGridFluentT &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
 
         GraphGridFluentT &direction(GraphDirection dir)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _dir = dir;
             return *this;
         }
 
         GraphGridFluentT &bgColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = c;
             return *this;
         }
 
         GraphGridFluentT &bgColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = detail::color565To888(c);
             return *this;
         }
 
         GraphGridFluentT &bgColor565(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = detail::color565To888(c);
             return *this;
         }
 
         GraphGridFluentT &speed(float v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _speed = v;
             return *this;
         }
 
         GraphGridFluentT &scale(bool enabled = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _autoScale = enabled;
             return *this;
         }
 
         GraphGridFluentT &scope(uint16_t rateHz, uint16_t timebaseMs)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _scopeRateHz = rateHz;
             _scopeTimebaseMs = timebaseMs;
             return *this;
@@ -887,8 +813,7 @@ namespace pipgui
 
         GraphGridFluentT &visible(uint16_t samples)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _scopeVisibleSamples = samples;
             return *this;
         }
@@ -922,48 +847,42 @@ namespace pipgui
 
         GraphLineFluentT &line(uint8_t idx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _lineIndex = idx;
             return *this;
         }
 
         GraphLineFluentT &value(int16_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _value = v;
             return *this;
         }
 
         GraphLineFluentT &color(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = c;
             return *this;
         }
 
         GraphLineFluentT &color(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = detail::color565To888(c);
             return *this;
         }
 
         GraphLineFluentT &color565(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = detail::color565To888(c);
             return *this;
         }
 
         GraphLineFluentT &range(int16_t vmin, int16_t vmax)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _valueMin = vmin;
             _valueMax = vmax;
             return *this;
@@ -971,8 +890,7 @@ namespace pipgui
 
         GraphLineFluentT &thickness(uint8_t t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _thickness = t;
             return *this;
         }
@@ -1008,16 +926,14 @@ namespace pipgui
 
         GraphSamplesFluentT &line(uint8_t idx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _lineIndex = idx;
             return *this;
         }
 
         GraphSamplesFluentT &samples(const int16_t *samples, uint16_t count)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _samples = samples;
             _sampleCount = count;
             return *this;
@@ -1025,32 +941,28 @@ namespace pipgui
 
         GraphSamplesFluentT &color(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = c;
             return *this;
         }
 
         GraphSamplesFluentT &color(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = detail::color565To888(c);
             return *this;
         }
 
         GraphSamplesFluentT &color565(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = detail::color565To888(c);
             return *this;
         }
 
         GraphSamplesFluentT &range(int16_t vmin, int16_t vmax)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _valueMin = vmin;
             _valueMax = vmax;
             return *this;
@@ -1058,8 +970,7 @@ namespace pipgui
 
         GraphSamplesFluentT &thickness(uint8_t t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _thickness = t;
             return *this;
         }
@@ -1084,24 +995,21 @@ namespace pipgui
 
         ToastFluent &text(const String &t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _text = t;
             return *this;
         }
 
         ToastFluent &pos(ToastPos p)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _pos = p;
             return *this;
         }
 
         ToastFluent &icon(IconId id)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = id;
             return *this;
         }
@@ -1133,8 +1041,7 @@ namespace pipgui
 
         NotificationFluent &text(const String &title, const String &message = "")
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _title = title;
             _message = message;
             return *this;
@@ -1142,32 +1049,28 @@ namespace pipgui
 
         NotificationFluent &button(const String &label)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _buttonText = label;
             return *this;
         }
 
         NotificationFluent &delay(uint16_t seconds)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _delaySeconds = seconds;
             return *this;
         }
 
         NotificationFluent &type(NotificationType v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _type = v;
             return *this;
         }
 
         NotificationFluent &icon(IconId id)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = id;
             return *this;
         }
@@ -1194,32 +1097,28 @@ namespace pipgui
 
         ShowErrorFluent &message(const String &value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _message = value;
             return *this;
         }
 
         ShowErrorFluent &code(const String &value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _code = value;
             return *this;
         }
 
         ShowErrorFluent &button(const String &value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _buttonText = value;
             return *this;
         }
 
         ShowErrorFluent &type(ErrorType value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _type = value;
             return *this;
         }
@@ -1257,8 +1156,7 @@ namespace pipgui
         template <size_t N>
         PopupMenuFluent &items(const char *const (&items)[N])
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _items = items;
             _count = static_cast<uint8_t>(N);
             return *this;
@@ -1266,8 +1164,7 @@ namespace pipgui
 
         PopupMenuFluent &items(const char *const *items, uint8_t count)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _items = items;
             _count = count;
             return *this;
@@ -1276,8 +1173,7 @@ namespace pipgui
         template <typename AnchorFluent>
         PopupMenuFluent &anchor(const AnchorFluent &component)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _anchorX = component._x;
             _anchorY = component._y;
             _anchorW = component._w;
@@ -1287,16 +1183,14 @@ namespace pipgui
 
         PopupMenuFluent &width(int16_t w)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             return *this;
         }
 
         PopupMenuFluent &selected(uint8_t idx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _selectedIndex = idx;
             return *this;
         }
@@ -1327,8 +1221,7 @@ namespace pipgui
 
         DrawIconFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -1336,32 +1229,28 @@ namespace pipgui
 
         DrawIconFluent &size(uint16_t sizePx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _sizePx = sizePx;
             return *this;
         }
 
         DrawIconFluent &icon(uint16_t iconId)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = iconId;
             return *this;
         }
 
         DrawIconFluent &color(uint16_t fg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fg565 = fg565;
             return *this;
         }
 
         DrawIconFluent &bgColor(uint16_t bg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bg565 = bg565;
             return *this;
         }
@@ -1393,8 +1282,7 @@ namespace pipgui
 
         AnimIconFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -1402,32 +1290,28 @@ namespace pipgui
 
         AnimIconFluentT &size(uint16_t sizePx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _sizePx = sizePx;
             return *this;
         }
 
         AnimIconFluentT &icon(uint16_t iconId)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = iconId;
             return *this;
         }
 
         AnimIconFluentT &color(uint16_t fg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fg565 = fg565;
             return *this;
         }
 
         AnimIconFluentT &bgColor(uint16_t bg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bg565 = bg565;
             return *this;
         }
@@ -1454,8 +1338,7 @@ namespace pipgui
 
         DrawScreenshotFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -1463,8 +1346,7 @@ namespace pipgui
 
         DrawScreenshotFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
@@ -1472,8 +1354,7 @@ namespace pipgui
 
         DrawScreenshotFluent &grid(uint8_t cols, uint8_t rows)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cols = cols;
             _rows = rows;
             return *this;
@@ -1481,8 +1362,7 @@ namespace pipgui
 
         DrawScreenshotFluent &padding(uint16_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _padding = px;
             return *this;
         }

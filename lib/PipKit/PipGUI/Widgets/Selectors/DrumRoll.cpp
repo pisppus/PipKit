@@ -1,5 +1,6 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Graphics/Utils/Easing.hpp>
+
 #include <math.h>
 
 namespace pipgui
@@ -101,8 +102,7 @@ namespace pipgui
                                                   .size(w, h)
                                                   .fill(detail::color888To565(bgColor))
                                                   .draw();
-                                              drawDrumRollHorizontal(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs);
-                                          });
+                                              drawDrumRollHorizontal(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs); });
                 return;
             }
 
@@ -222,8 +222,7 @@ namespace pipgui
                                                   .size(w, h)
                                                   .fill(detail::color888To565(bgColor))
                                                   .draw();
-                                              drawDrumRollVertical(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs);
-                                          });
+                                              drawDrumRollVertical(x, y, w, h, options, count, selectedIndex, fgColor, bgColor, fontPx, animDurationMs); });
                 return;
             }
 

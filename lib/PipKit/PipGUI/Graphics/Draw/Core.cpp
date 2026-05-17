@@ -1,5 +1,5 @@
 #include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Core/Debug.hpp>
+#include <PipGUI/Core/Debug/Debug.hpp>
 
 namespace pipgui
 {
@@ -283,8 +283,41 @@ namespace pipgui
         else
             spr->fillRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH, color);
 
+        debugRecordPaintRectLocal((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
+
         if (_disp.display && !_flags.inSpritePass)
-            invalidateRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
+            invalidateRect((int16_t)(clipX + _render.originX), (int16_t)(clipY + _render.originY),
+                           (int16_t)clipW, (int16_t)clipH);
+    }
+
+    void GUI::debugRecordPaintRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept
+    {
+        Debug::recordPaintRect(x, y, w, h);
+    }
+
+    void GUI::debugRecordPaintRectLocal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept
+    {
+        Debug::recordPaintRect((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w, h);
+    }
+
+    void GUI::debugRecordPaintSpanLocal(int16_t x, int16_t y, int16_t w) noexcept
+    {
+        Debug::recordPaintSpan((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w);
+    }
+
+    void GUI::debugRecordPaintPixelLocal(int16_t x, int16_t y) noexcept
+    {
+        Debug::recordPaintPixel((int16_t)(x + _render.originX), (int16_t)(y + _render.originY));
+    }
+
+    void GUI::debugRecordLayoutRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept
+    {
+        Debug::recordLayoutBounds(x, y, w, h);
+    }
+
+    void GUI::debugRecordSpacingRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept
+    {
+        Debug::recordSpacingBounds(x, y, w, h);
     }
 
     void GUI::invalidateRect(int16_t x, int16_t y, int16_t w, int16_t h)

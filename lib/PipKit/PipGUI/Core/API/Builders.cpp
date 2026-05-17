@@ -46,11 +46,11 @@ namespace pipgui
             if (_perCorner)
             {
                 detail::GuiAccess::drawRoundRect(*_gui, x, y, w, h,
-                                                shrinkRadius(_radiusTL, i),
-                                                shrinkRadius(_radiusTR, i),
-                                                shrinkRadius(_radiusBR, i),
-                                                shrinkRadius(_radiusBL, i),
-                                                _borderColor);
+                                                 shrinkRadius(_radiusTL, i),
+                                                 shrinkRadius(_radiusTR, i),
+                                                 shrinkRadius(_radiusBR, i),
+                                                 shrinkRadius(_radiusBL, i),
+                                                 _borderColor);
             }
             else if (_radius > 0)
             {
@@ -211,8 +211,10 @@ namespace pipgui
         const BlurDirection dir = _dir.value_or(TopDown);
         const bool gradient = _dir.has_value();
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateBlurRegion(*_gui, _x, _y, _w, _h, _radius, dir, gradient, _materialStrength, materialColor); },
-            [&] { detail::GuiAccess::drawBlurRegion(*_gui, _x, _y, _w, _h, _radius, dir, gradient, _materialStrength, materialColor); });
+            [&]
+            { detail::GuiAccess::updateBlurRegion(*_gui, _x, _y, _w, _h, _radius, dir, gradient, _materialStrength, materialColor); },
+            [&]
+            { detail::GuiAccess::drawBlurRegion(*_gui, _x, _y, _w, _h, _radius, dir, gradient, _materialStrength, materialColor); });
     }
     template void BlurRegionFluentT<false>::draw();
     template void BlurRegionFluentT<true>::draw();
@@ -223,8 +225,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateScrollDots(*_gui, _x, _y, _count, _activeIndex, _activeColor, _inactiveColor, _radius, _spacing); },
-            [&] { detail::GuiAccess::drawScrollDots(*_gui, _x, _y, _count, _activeIndex, _activeColor, _inactiveColor, _radius, _spacing); });
+            [&]
+            { detail::GuiAccess::updateScrollDots(*_gui, _x, _y, _count, _activeIndex, _activeColor, _inactiveColor, _radius, _spacing); },
+            [&]
+            { detail::GuiAccess::drawScrollDots(*_gui, _x, _y, _count, _activeIndex, _activeColor, _inactiveColor, _radius, _spacing); });
     }
     template void ScrollDotsFluentT<false>::draw();
     template void ScrollDotsFluentT<true>::draw();
@@ -235,8 +239,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateGraphGrid(*_gui, _x, _y, _w, _h, _radius, _dir, _bgColor, _speed, _autoScale, _scopeRateHz, _scopeTimebaseMs, _scopeVisibleSamples); },
-            [&] { detail::GuiAccess::drawGraphGrid(*_gui, _x, _y, _w, _h, _radius, _dir, _bgColor, _speed, _autoScale, _scopeRateHz, _scopeTimebaseMs, _scopeVisibleSamples); });
+            [&]
+            { detail::GuiAccess::updateGraphGrid(*_gui, _x, _y, _w, _h, _radius, _dir, _bgColor, _speed, _autoScale, _scopeRateHz, _scopeTimebaseMs, _scopeVisibleSamples); },
+            [&]
+            { detail::GuiAccess::drawGraphGrid(*_gui, _x, _y, _w, _h, _radius, _dir, _bgColor, _speed, _autoScale, _scopeRateHz, _scopeTimebaseMs, _scopeVisibleSamples); });
     }
     template void GraphGridFluentT<false>::draw();
     template void GraphGridFluentT<true>::draw();
@@ -247,8 +253,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateGraphLine(*_gui, _lineIndex, _value, _color, _valueMin, _valueMax, _thickness); },
-            [&] { detail::GuiAccess::drawGraphLine(*_gui, _lineIndex, _value, _color, _valueMin, _valueMax, _thickness); });
+            [&]
+            { detail::GuiAccess::updateGraphLine(*_gui, _lineIndex, _value, _color, _valueMin, _valueMax, _thickness); },
+            [&]
+            { detail::GuiAccess::drawGraphLine(*_gui, _lineIndex, _value, _color, _valueMin, _valueMax, _thickness); });
     }
     template void GraphLineFluentT<false>::draw();
     template void GraphLineFluentT<true>::draw();
@@ -259,8 +267,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateGraphSamples(*_gui, _lineIndex, _samples, _sampleCount, _color, _valueMin, _valueMax, _thickness); },
-            [&] { detail::GuiAccess::drawGraphSamples(*_gui, _lineIndex, _samples, _sampleCount, _color, _valueMin, _valueMax, _thickness); });
+            [&]
+            { detail::GuiAccess::updateGraphSamples(*_gui, _lineIndex, _samples, _sampleCount, _color, _valueMin, _valueMax, _thickness); },
+            [&]
+            { detail::GuiAccess::drawGraphSamples(*_gui, _lineIndex, _samples, _sampleCount, _color, _valueMin, _valueMax, _thickness); });
     }
     template void GraphSamplesFluentT<false>::draw();
     template void GraphSamplesFluentT<true>::draw();
@@ -273,8 +283,10 @@ namespace pipgui
         const int16_t bgColor = detail::optionalColor16(_bgColor);
         const int16_t glowColor = detail::optionalColor16(_glowColor);
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateGlowCircle(*_gui, _x, _y, _r, _fillColor, bgColor, glowColor, _glowSize, _glowStrength, _anim, _pulsePeriodMs); },
-            [&] { detail::GuiAccess::drawGlowCircle(*_gui, _x, _y, _r, _fillColor, bgColor, glowColor, _glowSize, _glowStrength, _anim, _pulsePeriodMs); });
+            [&]
+            { detail::GuiAccess::updateGlowCircle(*_gui, _x, _y, _r, _fillColor, bgColor, glowColor, _glowSize, _glowStrength, _anim, _pulsePeriodMs); },
+            [&]
+            { detail::GuiAccess::drawGlowCircle(*_gui, _x, _y, _r, _fillColor, bgColor, glowColor, _glowSize, _glowStrength, _anim, _pulsePeriodMs); });
     }
     template void GlowCircleFluentT<false>::draw();
     template void GlowCircleFluentT<true>::draw();
@@ -320,8 +332,10 @@ namespace pipgui
         if (_changed)
             *_changed = changed;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateToggleSwitch(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, knobColor); },
-            [&] { detail::GuiAccess::drawToggleSwitch(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, knobColor); });
+            [&]
+            { detail::GuiAccess::updateToggleSwitch(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, knobColor); },
+            [&]
+            { detail::GuiAccess::drawToggleSwitch(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, knobColor); });
     }
     template void ToggleSwitchFluentT<false>::draw();
     template void ToggleSwitchFluentT<true>::draw();
@@ -339,8 +353,10 @@ namespace pipgui
         state.loading = _showProgress ? false : (_modeSet ? _loading : false);
         detail::GuiAccess::stepButtonState(*_gui, state, _downSet ? _down : false);
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateButton(*_gui, _label, _x, _y, _w, _h, _baseColor, _radius, _iconId, state); },
-            [&] { detail::GuiAccess::drawButton(*_gui, _label, _x, _y, _w, _h, _baseColor, _radius, _iconId, state); });
+            [&]
+            { detail::GuiAccess::updateButton(*_gui, _label, _x, _y, _w, _h, _baseColor, _radius, _iconId, state); },
+            [&]
+            { detail::GuiAccess::drawButton(*_gui, _label, _x, _y, _w, _h, _baseColor, _radius, _iconId, state); });
     }
     template void ButtonFluentT<false>::draw();
     template void ButtonFluentT<true>::draw();
@@ -357,8 +373,10 @@ namespace pipgui
         const GUI::InputState &input = detail::GuiAccess::inputState(*_gui);
         detail::GuiAccess::stepSliderState(*_gui, state, *_value, input.nextDown, input.prevDown);
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateSlider(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, thumbColor); },
-            [&] { detail::GuiAccess::drawSlider(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, thumbColor); });
+            [&]
+            { detail::GuiAccess::updateSlider(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, thumbColor); },
+            [&]
+            { detail::GuiAccess::drawSlider(*_gui, _x, _y, _w, _h, state, _activeColor, inactiveColor, thumbColor); });
     }
     template void SliderFluentT<false>::draw();
     template void SliderFluentT<true>::draw();
@@ -369,8 +387,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateProgressDecorated(*_gui, _x, _y, _w, _h, _value, _baseColor, _fillColor, _radius, _anim, _showLabel ? &_label : nullptr, _labelColor, _labelAlign, _labelFontPx, _showPercent, _percentColor, _percentAlign, _percentFontPx); },
-            [&] { detail::GuiAccess::drawProgressDecorated(*_gui, _x, _y, _w, _h, _value, _baseColor, _fillColor, _radius, _anim, _showLabel ? &_label : nullptr, _labelColor, _labelAlign, _labelFontPx, _showPercent, _percentColor, _percentAlign, _percentFontPx); });
+            [&]
+            { detail::GuiAccess::updateProgressDecorated(*_gui, _x, _y, _w, _h, _value, _baseColor, _fillColor, _radius, _anim, _showLabel ? &_label : nullptr, _labelColor, _labelAlign, _labelFontPx, _showPercent, _percentColor, _percentAlign, _percentFontPx); },
+            [&]
+            { detail::GuiAccess::drawProgressDecorated(*_gui, _x, _y, _w, _h, _value, _baseColor, _fillColor, _radius, _anim, _showLabel ? &_label : nullptr, _labelColor, _labelAlign, _labelFontPx, _showPercent, _percentColor, _percentAlign, _percentFontPx); });
     }
     template void ProgressFluentT<false>::draw();
     template void ProgressFluentT<true>::draw();
@@ -381,8 +401,10 @@ namespace pipgui
         if (!beginCommit())
             return;
         detail::callByMode<IsUpdate>(
-            [&] { detail::GuiAccess::updateCircleProgress(*_gui, _x, _y, _r, _thickness, _value, _baseColor, _fillColor, _anim); },
-            [&] { detail::GuiAccess::drawCircleProgress(*_gui, _x, _y, _r, _thickness, _value, _baseColor, _fillColor, _anim); });
+            [&]
+            { detail::GuiAccess::updateCircleProgress(*_gui, _x, _y, _r, _thickness, _value, _baseColor, _fillColor, _anim); },
+            [&]
+            { detail::GuiAccess::drawCircleProgress(*_gui, _x, _y, _r, _thickness, _value, _baseColor, _fillColor, _anim); });
     }
     template void CircleProgressFluentT<false>::draw();
     template void CircleProgressFluentT<true>::draw();
@@ -406,5 +428,3 @@ namespace pipgui
     }
 
 }
-
-

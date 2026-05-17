@@ -1,12 +1,14 @@
 #pragma once
 
-#include <Arduino.h>
-#include <PipGUI/Core/Config/Select.hpp>
+#include <cstdint>
 #include <PipCore/Input/Button.hpp>
+
+#include <PipGUI/Core/Config/Select.hpp>
 #include <PipGUI/Core/UiLayout.hpp>
-#include <PipGUI/Graphics/Utils/Colors.hpp>
-#include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+
 #include <PipGUI/Graphics/Text/Icons/AnimMetrics.hpp>
+#include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+#include <PipGUI/Graphics/Utils/Colors.hpp>
 
 namespace pipgui
 {

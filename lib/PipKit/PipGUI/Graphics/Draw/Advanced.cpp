@@ -101,11 +101,18 @@ namespace pipgui
 
         struct DistSqAlphaLut
         {
-            uint8_t radius = 0xFF;
+            uint8_t radius = 0;
+            bool valid = false;
             float minSq = 0.0f;
             float maxSq = 1.0f;
             float scale = 0.0f;
             uint8_t table[513] = {};
+        };
+
+        struct DistSqAlphaLutCache
+        {
+            uint8_t nextSlot = 0;
+            DistSqAlphaLut slots[8] = {};
         };
 
         static inline uint8_t sampleDistSqAlpha(const DistSqAlphaLut &lut, float dSq)
@@ -124,16 +131,14 @@ namespace pipgui
         }
 
         template <typename AlphaFn>
-        static inline const DistSqAlphaLut &buildRoundTriangleLut(DistSqAlphaLut &lut,
-                                                                  uint8_t radius,
-                                                                  float minRadius,
-                                                                  float maxRadius,
-                                                                  AlphaFn alphaFn)
+        static inline void buildRoundTriangleLut(DistSqAlphaLut &lut,
+                                                 uint8_t radius,
+                                                 float minRadius,
+                                                 float maxRadius,
+                                                 AlphaFn alphaFn)
         {
-            if (lut.radius == radius)
-                return lut;
-
             lut.radius = radius;
+            lut.valid = true;
             lut.minSq = minRadius * minRadius;
             lut.maxSq = maxRadius * maxRadius;
             lut.scale = (lut.maxSq > lut.minSq) ? (512.0f / (lut.maxSq - lut.minSq)) : 0.0f;
@@ -144,16 +149,34 @@ namespace pipgui
                 const float dSq = lut.minSq + step * i;
                 lut.table[i] = alphaFn(dSq);
             }
-            return lut;
+        }
+
+        template <typename AlphaFn>
+        static inline const DistSqAlphaLut &cachedRoundTriangleLut(DistSqAlphaLutCache &cache,
+                                                                   uint8_t radius,
+                                                                   float minRadius,
+                                                                   float maxRadius,
+                                                                   AlphaFn alphaFn)
+        {
+            for (DistSqAlphaLut &slot : cache.slots)
+            {
+                if (slot.valid && slot.radius == radius)
+                    return slot;
+            }
+
+            DistSqAlphaLut &slot = cache.slots[cache.nextSlot];
+            cache.nextSlot = static_cast<uint8_t>((cache.nextSlot + 1U) % (sizeof(cache.slots) / sizeof(cache.slots[0])));
+            buildRoundTriangleLut(slot, radius, minRadius, maxRadius, alphaFn);
+            return slot;
         }
 
         static inline const DistSqAlphaLut &roundTriangleOutlineLut(uint8_t radius)
         {
-            static DistSqAlphaLut lut;
+            static DistSqAlphaLutCache cache;
             const float bandMin = std::max(0.0f, radius - 1.0f);
             const float bandMax = radius + 1.0f;
-            return buildRoundTriangleLut(
-                lut, radius, bandMin, bandMax,
+            return cachedRoundTriangleLut(
+                cache, radius, bandMin, bandMax,
                 [&](float dSq)
                 {
                     const float edgeDist = fabsf(sqrtf(dSq) - radius) - 0.5f;
@@ -163,13 +186,120 @@ namespace pipgui
 
         static inline const DistSqAlphaLut &roundTriangleFillLut(uint8_t radius)
         {
-            static DistSqAlphaLut lut;
+            static DistSqAlphaLutCache cache;
             const float innerRadius = std::max(0.0f, radius - 0.5f);
             const float outerRadius = radius + 1.0f;
-            return buildRoundTriangleLut(
-                lut, radius, innerRadius, outerRadius,
+            return cachedRoundTriangleLut(
+                cache, radius, innerRadius, outerRadius,
                 [&](float dSq)
                 { return alphaSdfAA(sqrtf(dSq) - radius); });
+        }
+
+        static inline bool ellipseCanUse32BitMath(int16_t rx, int16_t ry) noexcept
+        {
+            const uint64_t rx2 = (uint64_t)(uint32_t)rx * (uint32_t)rx;
+            const uint64_t ry2 = (uint64_t)(uint32_t)ry * (uint32_t)ry;
+            return rx2 * ry2 <= UINT32_MAX &&
+                   (uint64_t)(2u * (uint32_t)rx + 1u) * ry2 <= UINT32_MAX &&
+                   (uint64_t)(2u * (uint32_t)ry + 1u) * rx2 <= UINT32_MAX;
+        }
+
+        template <typename FillSpanFn, typename BlendSideFn>
+        static inline void rasterFillEllipse32(int16_t cx, int16_t cy, int16_t rx, int16_t ry,
+                                               uint32_t rx2, uint32_t ry2, uint32_t rhs,
+                                               const uint8_t *gamma,
+                                               FillSpanFn fillSpan, BlendSideFn blendSide)
+        {
+            int32_t xi = rx;
+            uint32_t xTerm = (uint32_t)xi * (uint32_t)xi * ry2;
+            uint32_t yTerm = 0;
+            for (int16_t dy = 0; dy <= ry; ++dy)
+            {
+                while (xi > 0 && xTerm > rhs - yTerm)
+                {
+                    xTerm -= (uint32_t)(xi * 2 - 1) * ry2;
+                    --xi;
+                }
+
+                const int16_t py0 = (int16_t)(cy - dy), py1 = (int16_t)(cy + dy);
+                const int16_t x0 = (int16_t)(cx - xi), x1 = (int16_t)(cx + xi);
+                const uint8_t ag = gamma[fracAlphaFromResidual(rhs - (xTerm + yTerm), (uint32_t)(2 * xi + 1) * ry2)];
+                fillSpan(py0, x0, x1);
+                blendSide((int16_t)(x1 + 1), py0, ag);
+                blendSide((int16_t)(x0 - 1), py0, ag);
+                if (dy)
+                {
+                    fillSpan(py1, x0, x1);
+                    blendSide((int16_t)(x1 + 1), py1, ag);
+                    blendSide((int16_t)(x0 - 1), py1, ag);
+                }
+
+                yTerm += (uint32_t)(dy * 2 + 1) * rx2;
+            }
+        }
+
+        template <typename PlotFn>
+        static inline void rasterDrawEllipse32(int16_t cx, int16_t cy, int16_t rx, int16_t ry,
+                                               uint32_t rx2, uint32_t ry2, uint32_t rhs,
+                                               const uint8_t *gamma,
+                                               PlotFn plot)
+        {
+            auto plot4 = [&](int16_t px0, int16_t px1, int16_t py0, int16_t py1, uint8_t alpha) __attribute__((always_inline))
+            {
+                plot(px0, py0, alpha);
+                plot(px1, py0, alpha);
+                plot(px0, py1, alpha);
+                plot(px1, py1, alpha);
+            };
+
+            const uint32_t diag = isqrt32(rx2 + ry2);
+            int32_t yi = ry;
+            uint32_t yiTerm = (uint32_t)yi * (uint32_t)yi * rx2;
+            const int16_t qx = (diag > 0) ? (int16_t)((rx2 + (diag >> 1)) / diag) : 0;
+            uint32_t xTerm = 0;
+            for (int16_t dx = 0; dx <= qx; ++dx)
+            {
+                while (yi > 0 && xTerm > rhs - yiTerm)
+                {
+                    yiTerm -= (uint32_t)(yi * 2 - 1) * rx2;
+                    --yi;
+                }
+
+                const uint8_t frac = fracAlphaFromResidual(rhs - (xTerm + yiTerm), (uint32_t)(2 * yi + 1) * rx2);
+                const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
+                const int16_t x0 = (int16_t)(cx + dx), x1 = (int16_t)(cx - dx);
+                const int16_t y0 = (int16_t)(cy + yi), y1 = (int16_t)(cy - yi);
+                plot4(x0, x1, y0, y1, a0);
+                plot4(x0, x1, (int16_t)(y0 + 1), (int16_t)(y1 - 1), a1);
+                xTerm += (uint32_t)(dx * 2 + 1) * ry2;
+            }
+
+            int32_t xi = rx;
+            uint32_t xiTerm = (uint32_t)xi * (uint32_t)xi * ry2;
+            const int16_t qy = (diag > 0) ? (int16_t)((ry2 + (diag >> 1)) / diag) : 0;
+            uint32_t yTerm = 0;
+            for (int16_t dy = 0; dy <= qy; ++dy)
+            {
+                while (xi > 0 && xiTerm > rhs - yTerm)
+                {
+                    xiTerm -= (uint32_t)(xi * 2 - 1) * ry2;
+                    --xi;
+                }
+
+                const uint8_t frac = fracAlphaFromResidual(rhs - (xiTerm + yTerm), (uint32_t)(2 * xi + 1) * ry2);
+                const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
+                const int16_t px0 = (int16_t)(cx + xi), px1 = (int16_t)(cx - xi);
+                const int16_t py0 = (int16_t)(cy + dy), py1 = (int16_t)(cy - dy);
+                plot(px0, py0, a0);
+                plot((int16_t)(px0 + 1), py0, a1);
+                plot(px1, py0, a0);
+                plot((int16_t)(px1 - 1), py0, a1);
+                plot(px0, py1, a0);
+                plot((int16_t)(px0 + 1), py1, a1);
+                plot(px1, py1, a0);
+                plot((int16_t)(px1 - 1), py1, a1);
+                yTerm += (uint32_t)(dy * 2 + 1) * rx2;
+            }
         }
     }
 
@@ -188,59 +318,80 @@ namespace pipgui
         if (cx + rx < s.clipX || cx - rx > s.clipR || cy + ry < s.clipY || cy - ry > s.clipB)
             return;
 
-        const int64_t rx2 = (int64_t)rx * rx;
-        const int64_t ry2 = (int64_t)ry * ry;
-        const int64_t rhs = rx2 * ry2;
         const Color565 c = makeColor565(color);
         const uint8_t *gamma = gammaTable();
         const bool noClip = (cx - rx - 1 >= s.clipX && cx + rx + 1 <= s.clipR &&
                              cy - ry >= s.clipY && cy + ry <= s.clipB);
-        auto raster = [&](auto fillSpan, auto blendSide) __attribute__((always_inline))
+        if (ellipseCanUse32BitMath(rx, ry))
         {
-            int32_t xi = rx;
-            int64_t xTerm = (int64_t)xi * xi * ry2;
-            int64_t yTerm = 0;
-            for (int16_t dy = 0; dy <= ry; ++dy)
-            {
-                while (xi > 0 && xTerm + yTerm > rhs)
-                {
-                    xTerm -= (int64_t)(xi * 2 - 1) * ry2;
-                    --xi;
-                }
-
-                const int16_t py0 = (int16_t)(cy - dy), py1 = (int16_t)(cy + dy);
-                const int16_t x0 = (int16_t)(cx - xi), x1 = (int16_t)(cx + xi);
-                const uint8_t ag = gamma[fracAlphaFromResidual(rhs - (xTerm + yTerm), (int64_t)(2 * xi + 1) * ry2)];
-                fillSpan(py0, x0, x1);
-                blendSide((int16_t)(x1 + 1), py0, ag);
-                blendSide((int16_t)(x0 - 1), py0, ag);
-                if (dy)
-                {
-                    fillSpan(py1, x0, x1);
-                    blendSide((int16_t)(x1 + 1), py1, ag);
-                    blendSide((int16_t)(x0 - 1), py1, ag);
-                }
-
-                yTerm += (int64_t)(dy * 2 + 1) * rx2;
-            }
-        };
-
-        if (noClip)
-            raster([&](int16_t py, int16_t x0, int16_t x1)
-                   { fillSpanFast(s, py, x0, x1, c); },
-                   [&](int16_t px, int16_t py, uint8_t alpha)
-                   {
-                       if (alpha)
-                           blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha);
-                   });
+            const uint32_t rx2 = (uint32_t)rx * (uint32_t)rx;
+            const uint32_t ry2 = (uint32_t)ry * (uint32_t)ry;
+            const uint32_t rhs = rx2 * ry2;
+            if (noClip)
+                rasterFillEllipse32(cx, cy, rx, ry, rx2, ry2, rhs, gamma, [&](int16_t py, int16_t x0, int16_t x1)
+                                    { fillSpanFast(s, py, x0, x1, c); }, [&](int16_t px, int16_t py, uint8_t alpha)
+                                    {
+                                        if (alpha)
+                                            blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha); });
+            else
+                rasterFillEllipse32(cx, cy, rx, ry, rx2, ry2, rhs, gamma, [&](int16_t py, int16_t x0, int16_t x1)
+                                    { fillSpanClip(s, py, x0, x1, c); }, [&](int16_t px, int16_t py, uint8_t alpha)
+                                    {
+                                        if (alpha)
+                                            plotBlendClip(s, c, px, py, alpha); });
+        }
         else
-            raster([&](int16_t py, int16_t x0, int16_t x1)
-                   { fillSpanClip(s, py, x0, x1, c); },
-                   [&](int16_t px, int16_t py, uint8_t alpha)
-                   {
-                       if (alpha)
-                           plotBlendClip(s, c, px, py, alpha);
-                   });
+        {
+            const int64_t rx2 = (int64_t)rx * rx;
+            const int64_t ry2 = (int64_t)ry * ry;
+            const int64_t rhs = rx2 * ry2;
+            auto raster = [&](auto fillSpan, auto blendSide) __attribute__((always_inline))
+            {
+                int32_t xi = rx;
+                int64_t xTerm = (int64_t)xi * xi * ry2;
+                int64_t yTerm = 0;
+                for (int16_t dy = 0; dy <= ry; ++dy)
+                {
+                    while (xi > 0 && xTerm + yTerm > rhs)
+                    {
+                        xTerm -= (int64_t)(xi * 2 - 1) * ry2;
+                        --xi;
+                    }
+
+                    const int16_t py0 = (int16_t)(cy - dy), py1 = (int16_t)(cy + dy);
+                    const int16_t x0 = (int16_t)(cx - xi), x1 = (int16_t)(cx + xi);
+                    const uint8_t ag = gamma[fracAlphaFromResidual(rhs - (xTerm + yTerm), (int64_t)(2 * xi + 1) * ry2)];
+                    fillSpan(py0, x0, x1);
+                    blendSide((int16_t)(x1 + 1), py0, ag);
+                    blendSide((int16_t)(x0 - 1), py0, ag);
+                    if (dy)
+                    {
+                        fillSpan(py1, x0, x1);
+                        blendSide((int16_t)(x1 + 1), py1, ag);
+                        blendSide((int16_t)(x0 - 1), py1, ag);
+                    }
+
+                    yTerm += (int64_t)(dy * 2 + 1) * rx2;
+                }
+            };
+
+            if (noClip)
+                raster([&](int16_t py, int16_t x0, int16_t x1)
+                       { fillSpanFast(s, py, x0, x1, c); },
+                       [&](int16_t px, int16_t py, uint8_t alpha)
+                       {
+                           if (alpha)
+                               blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha);
+                       });
+            else
+                raster([&](int16_t py, int16_t x0, int16_t x1)
+                       { fillSpanClip(s, py, x0, x1, c); },
+                       [&](int16_t px, int16_t py, uint8_t alpha)
+                       {
+                           if (alpha)
+                               plotBlendClip(s, c, px, py, alpha);
+                       });
+        }
 
         if (_disp.display && !_flags.inSpritePass)
             invalidateRect(cx - rx, cy - ry, rx * 2 + 1, ry * 2 + 1);
@@ -262,79 +413,96 @@ namespace pipgui
             cy + ry + 1 < s.clipY || cy - ry - 1 > s.clipB)
             return;
 
-        const int64_t rx2 = (int64_t)rx * rx;
-        const int64_t ry2 = (int64_t)ry * ry;
-        const int64_t rhs = rx2 * ry2;
         const Color565 c = makeColor565(color);
         const uint8_t *gamma = gammaTable();
         const bool noClip = (cx - rx - 1 >= s.clipX && cx + rx + 1 <= s.clipR &&
                              cy - ry - 1 >= s.clipY && cy + ry + 1 <= s.clipB);
-        auto raster = [&](auto plot) __attribute__((always_inline))
+        if (ellipseCanUse32BitMath(rx, ry))
         {
-            auto plot4 = [&](int16_t px0, int16_t px1, int16_t py0, int16_t py1, uint8_t alpha) __attribute__((always_inline))
+            const uint32_t rx2 = (uint32_t)rx * (uint32_t)rx;
+            const uint32_t ry2 = (uint32_t)ry * (uint32_t)ry;
+            const uint32_t rhs = rx2 * ry2;
+            if (noClip)
+                rasterDrawEllipse32(cx, cy, rx, ry, rx2, ry2, rhs, gamma,
+                                    [&](int16_t px, int16_t py, uint8_t alpha)
+                                    { blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha); });
+            else
+                rasterDrawEllipse32(cx, cy, rx, ry, rx2, ry2, rhs, gamma,
+                                    [&](int16_t px, int16_t py, uint8_t alpha)
+                                    { plotBlendClip(s, c, px, py, alpha); });
+        }
+        else
+        {
+            const int64_t rx2 = (int64_t)rx * rx;
+            const int64_t ry2 = (int64_t)ry * ry;
+            const int64_t rhs = rx2 * ry2;
+            auto raster = [&](auto plot) __attribute__((always_inline))
             {
-                plot(px0, py0, alpha);
-                plot(px1, py0, alpha);
-                plot(px0, py1, alpha);
-                plot(px1, py1, alpha);
+                auto plot4 = [&](int16_t px0, int16_t px1, int16_t py0, int16_t py1, uint8_t alpha) __attribute__((always_inline))
+                {
+                    plot(px0, py0, alpha);
+                    plot(px1, py0, alpha);
+                    plot(px0, py1, alpha);
+                    plot(px1, py1, alpha);
+                };
+
+                const uint32_t diag = isqrt32((uint32_t)(rx2 + ry2));
+                int32_t yi = ry;
+                int64_t yiTerm = (int64_t)yi * yi * rx2;
+                const int16_t qx = (diag > 0) ? (int16_t)((rx2 + (diag >> 1)) / diag) : 0;
+                int64_t xTerm = 0;
+                for (int16_t dx = 0; dx <= qx; ++dx)
+                {
+                    while (yi > 0 && xTerm + yiTerm > rhs)
+                    {
+                        yiTerm -= (int64_t)(yi * 2 - 1) * rx2;
+                        --yi;
+                    }
+
+                    const uint8_t frac = fracAlphaFromResidual(rhs - (xTerm + yiTerm), (int64_t)(2 * yi + 1) * rx2);
+                    const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
+                    const int16_t x0 = (int16_t)(cx + dx), x1 = (int16_t)(cx - dx);
+                    const int16_t y0 = (int16_t)(cy + yi), y1 = (int16_t)(cy - yi);
+                    plot4(x0, x1, y0, y1, a0);
+                    plot4(x0, x1, (int16_t)(y0 + 1), (int16_t)(y1 - 1), a1);
+                    xTerm += (int64_t)(dx * 2 + 1) * ry2;
+                }
+
+                int32_t xi = rx;
+                int64_t xiTerm = (int64_t)xi * xi * ry2;
+                const int16_t qy = (diag > 0) ? (int16_t)((ry2 + (diag >> 1)) / diag) : 0;
+                int64_t yTerm = 0;
+                for (int16_t dy = 0; dy <= qy; ++dy)
+                {
+                    while (xi > 0 && xiTerm + yTerm > rhs)
+                    {
+                        xiTerm -= (int64_t)(xi * 2 - 1) * ry2;
+                        --xi;
+                    }
+
+                    const uint8_t frac = fracAlphaFromResidual(rhs - (xiTerm + yTerm), (int64_t)(2 * xi + 1) * ry2);
+                    const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
+                    const int16_t px0 = (int16_t)(cx + xi), px1 = (int16_t)(cx - xi);
+                    const int16_t py0 = (int16_t)(cy + dy), py1 = (int16_t)(cy - dy);
+                    plot(px0, py0, a0);
+                    plot((int16_t)(px0 + 1), py0, a1);
+                    plot(px1, py0, a0);
+                    plot((int16_t)(px1 - 1), py0, a1);
+                    plot(px0, py1, a0);
+                    plot((int16_t)(px0 + 1), py1, a1);
+                    plot(px1, py1, a0);
+                    plot((int16_t)(px1 - 1), py1, a1);
+                    yTerm += (int64_t)(dy * 2 + 1) * rx2;
+                }
             };
 
-            const uint32_t diag = isqrt32((uint32_t)(rx2 + ry2));
-            int32_t yi = ry;
-            int64_t yiTerm = (int64_t)yi * yi * rx2;
-            const int16_t qx = (diag > 0) ? (int16_t)((rx2 + (diag >> 1)) / diag) : 0;
-            int64_t xTerm = 0;
-            for (int16_t dx = 0; dx <= qx; ++dx)
-            {
-                while (yi > 0 && xTerm + yiTerm > rhs)
-                {
-                    yiTerm -= (int64_t)(yi * 2 - 1) * rx2;
-                    --yi;
-                }
-
-                const uint8_t frac = fracAlphaFromResidual(rhs - (xTerm + yiTerm), (int64_t)(2 * yi + 1) * rx2);
-                const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
-                const int16_t x0 = (int16_t)(cx + dx), x1 = (int16_t)(cx - dx);
-                const int16_t y0 = (int16_t)(cy + yi), y1 = (int16_t)(cy - yi);
-                plot4(x0, x1, y0, y1, a0);
-                plot4(x0, x1, (int16_t)(y0 + 1), (int16_t)(y1 - 1), a1);
-                xTerm += (int64_t)(dx * 2 + 1) * ry2;
-            }
-
-            int32_t xi = rx;
-            int64_t xiTerm = (int64_t)xi * xi * ry2;
-            const int16_t qy = (diag > 0) ? (int16_t)((ry2 + (diag >> 1)) / diag) : 0;
-            int64_t yTerm = 0;
-            for (int16_t dy = 0; dy <= qy; ++dy)
-            {
-                while (xi > 0 && xiTerm + yTerm > rhs)
-                {
-                    xiTerm -= (int64_t)(xi * 2 - 1) * ry2;
-                    --xi;
-                }
-
-                const uint8_t frac = fracAlphaFromResidual(rhs - (xiTerm + yTerm), (int64_t)(2 * xi + 1) * ry2);
-                const uint8_t a0 = gamma[255 - frac], a1 = gamma[frac];
-                const int16_t px0 = (int16_t)(cx + xi), px1 = (int16_t)(cx - xi);
-                const int16_t py0 = (int16_t)(cy + dy), py1 = (int16_t)(cy - dy);
-                plot(px0, py0, a0);
-                plot((int16_t)(px0 + 1), py0, a1);
-                plot(px1, py0, a0);
-                plot((int16_t)(px1 - 1), py0, a1);
-                plot(px0, py1, a0);
-                plot((int16_t)(px0 + 1), py1, a1);
-                plot(px1, py1, a0);
-                plot((int16_t)(px1 - 1), py1, a1);
-                yTerm += (int64_t)(dy * 2 + 1) * rx2;
-            }
-        };
-
-        if (noClip)
-            raster([&](int16_t px, int16_t py, uint8_t alpha)
-                   { blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha); });
-        else
-            raster([&](int16_t px, int16_t py, uint8_t alpha)
-                   { plotBlendClip(s, c, px, py, alpha); });
+            if (noClip)
+                raster([&](int16_t px, int16_t py, uint8_t alpha)
+                       { blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha); });
+            else
+                raster([&](int16_t px, int16_t py, uint8_t alpha)
+                       { plotBlendClip(s, c, px, py, alpha); });
+        }
 
         if (_disp.display && !_flags.inSpritePass)
             invalidateRect(cx - rx - 1, cy - ry - 1, rx * 2 + 3, ry * 2 + 3);

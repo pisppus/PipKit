@@ -13,4 +13,3 @@ namespace pipgui::net
     [[nodiscard]] bool wifiConnected() noexcept;
     [[nodiscard]] uint32_t wifiLocalIpV4() noexcept;
 }
-

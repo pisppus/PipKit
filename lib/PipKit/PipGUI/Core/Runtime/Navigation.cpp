@@ -1,6 +1,6 @@
-#include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Core/Debug.hpp>
 #include <PipGUI/Core/Internal/ScreenRegistry.hpp>
+#include <PipGUI/Core/GUI.hpp>
+#include <PipGUI/Core/Debug/Debug.hpp>
 
 namespace pipgui
 {
@@ -191,7 +191,11 @@ namespace pipgui
         _render.activeSprite = &_render.sprite;
         if (screenId != INVALID_SCREEN_ID)
             _screen.current = screenId;
+        setBackgroundColorCache(0x0000);
+        const bool prevPaintCaptureSuspended = Debug::paintCaptureSuspended();
+        Debug::setPaintCaptureSuspended(true);
         clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+        Debug::setPaintCaptureSuspended(prevPaintCaptureSuspended);
 
         ListState *list = getList(targetScreen);
         if (list && list->configured && list->itemCount > 0)
@@ -280,6 +284,9 @@ namespace pipgui
         if (w <= 0 || h <= 0)
             return false;
 
+        if (srcX == dstX && srcY == dstY)
+            Debug::drawOverlay(const_cast<uint16_t *>(buf), srcW, srcX, srcY, w, h);
+
         _disp.display->writeRect565(dstX, dstY, w, h, buf + (size_t)srcY * srcW + srcX, srcW);
         reportPlatformErrorOnce(stage);
 
@@ -345,4 +352,3 @@ namespace pipgui
         }
     }
 }
-

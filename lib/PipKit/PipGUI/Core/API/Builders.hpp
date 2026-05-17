@@ -3,16 +3,16 @@
 #include <PipGUI/Core/API/Builders/Base.hpp>
 #include <PipGUI/Graphics/Utils/Colors.hpp>
 
-#define PIPGUI_DEFAULT_FLUENT_MOVE(Type) \
-    Type(const Type &) = default;        \
+#define PIPGUI_DEFAULT_FLUENT_MOVE(Type)     \
+    Type(const Type &) = default;            \
     Type &operator=(const Type &) = default; \
-    Type(Type &&) = default;             \
-    Type &operator=(Type &&) = default;  \
-    Type derive()                        \
-    {                                    \
-        Type copy(*this);                \
-        this->_consumed = true;          \
-        return copy;                     \
+    Type(Type &&) = default;                 \
+    Type &operator=(Type &&) = default;      \
+    [[nodiscard]] Type derive()              \
+    {                                        \
+        Type copy(*this);                    \
+        this->_consumed = true;              \
+        return copy;                         \
     }
 
 #include "Builders/BuilderConfig.hpp"
@@ -22,3 +22,4 @@
 #include "Builders/Text.hpp"
 
 #undef PIPGUI_DEFAULT_FLUENT_MOVE
+#undef PIPGUI_FLUENT_GUARD

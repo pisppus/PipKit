@@ -32,8 +32,7 @@ namespace pipgui
 
         TextFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -41,8 +40,7 @@ namespace pipgui
 
         TextFluentT &font(FontId fontId, uint16_t sizePx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fontId = fontId;
             _sizePx = sizePx;
             return *this;
@@ -50,8 +48,7 @@ namespace pipgui
 
         TextFluentT &weight(uint16_t weight)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _weight = weight;
             return *this;
         }
@@ -63,32 +60,28 @@ namespace pipgui
 
         TextFluentT &text(const String &t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _text = t;
             return *this;
         }
 
         TextFluentT &color(uint16_t fg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fg565 = fg565;
             return *this;
         }
 
         TextFluentT &bgColor(uint16_t bg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bg565 = bg565;
             return *this;
         }
 
         TextFluentT &align(TextAlign a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _align = a;
             return *this;
         }
@@ -124,8 +117,7 @@ namespace pipgui
 
         DrawTextMarqueeFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -133,16 +125,14 @@ namespace pipgui
 
         DrawTextMarqueeFluent &width(int16_t width)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _maxWidth = width;
             return *this;
         }
 
         DrawTextMarqueeFluent &font(FontId fontId, uint16_t sizePx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fontId = fontId;
             _sizePx = sizePx;
             return *this;
@@ -150,8 +140,7 @@ namespace pipgui
 
         DrawTextMarqueeFluent &weight(uint16_t weight)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _weight = weight;
             return *this;
         }
@@ -163,56 +152,49 @@ namespace pipgui
 
         DrawTextMarqueeFluent &text(const String &t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _text = t;
             return *this;
         }
 
         DrawTextMarqueeFluent &color(uint16_t fg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fg565 = fg565;
             return *this;
         }
 
         DrawTextMarqueeFluent &align(TextAlign a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _align = a;
             return *this;
         }
 
         DrawTextMarqueeFluent &options(const MarqueeTextOptions &opts)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _opts = opts;
             return *this;
         }
 
         DrawTextMarqueeFluent &speed(uint16_t pxPerSec)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _opts.speedPxPerSec = pxPerSec;
             return *this;
         }
 
         DrawTextMarqueeFluent &holdStart(uint16_t ms)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _opts.holdStartMs = ms;
             return *this;
         }
 
         DrawTextMarqueeFluent &phaseStart(uint32_t ms)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _opts.phaseStartMs = ms;
             return *this;
         }
@@ -246,8 +228,7 @@ namespace pipgui
 
         DrawTextEllipsizedFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
@@ -255,16 +236,14 @@ namespace pipgui
 
         DrawTextEllipsizedFluent &width(int16_t width)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _maxWidth = width;
             return *this;
         }
 
         DrawTextEllipsizedFluent &font(FontId fontId, uint16_t sizePx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fontId = fontId;
             _sizePx = sizePx;
             return *this;
@@ -272,8 +251,7 @@ namespace pipgui
 
         DrawTextEllipsizedFluent &weight(uint16_t weight)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _weight = weight;
             return *this;
         }
@@ -285,24 +263,21 @@ namespace pipgui
 
         DrawTextEllipsizedFluent &text(const String &t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _text = t;
             return *this;
         }
 
         DrawTextEllipsizedFluent &color(uint16_t fg565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fg565 = fg565;
             return *this;
         }
 
         DrawTextEllipsizedFluent &align(TextAlign a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _align = a;
             return *this;
         }

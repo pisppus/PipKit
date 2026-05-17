@@ -1,4 +1,5 @@
 #include "Internal.hpp"
+
 namespace pipgui
 {
     namespace

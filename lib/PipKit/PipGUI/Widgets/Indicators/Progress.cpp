@@ -1,6 +1,7 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Graphics/Utils/Colors.hpp>
 #include <PipGUI/Graphics/Utils/Easing.hpp>
+
 #include <math.h>
 
 namespace pipgui
@@ -13,7 +14,7 @@ namespace pipgui
         constexpr uint8_t kDefaultBaseBoost = 10;
         constexpr uint8_t kShimmerPeakIntensity = 110;
         constexpr float kPi = 3.14159265358979323846f;
-        constexpr float kCircleProgressStartDeg = 32.0f;
+        constexpr float kCircleProgressStartDeg = 0.0f;
         constexpr float kCircleProgressGapVisibleDeg = 12.0f;
         constexpr float kCircleProgressGapMinDeg = 20.0f;
         constexpr float kCircleProgressGapMaxDeg = 42.0f;
@@ -88,14 +89,6 @@ namespace pipgui
             return gapDeg;
         }
 
-        [[nodiscard]] float circularProgressMinSegmentDeg(int16_t r, uint8_t thickness) noexcept
-        {
-            float minDeg = circularProgressCapSweepDeg(r, thickness) * 0.8f + 4.0f;
-            if (minDeg < 8.0f)
-                minDeg = 8.0f;
-            return minDeg;
-        }
-
         [[nodiscard]] float circularProgressAvailableSweep(int16_t r, uint8_t thickness) noexcept
         {
             const float gapDeg = resolveCircularProgressGapDeg(r, thickness);
@@ -122,8 +115,9 @@ namespace pipgui
 
         [[nodiscard]] float circularProgressSweepForValue(uint8_t value, int16_t r, uint8_t thickness) noexcept
         {
-            const float availableSweep = circularProgressAvailableSweep(r, thickness);
-            return (static_cast<float>(clampProgressValue(value)) * availableSweep) / 100.0f;
+            (void)r;
+            (void)thickness;
+            return static_cast<float>(clampProgressValue(value)) * 3.6f;
         }
 
         struct CircularProgressSegments
@@ -131,6 +125,7 @@ namespace pipgui
             float fillStart = kCircleProgressStartDeg;
             float fillEnd = kCircleProgressStartDeg;
             float fillSweep = 0.0f;
+            float baseSweep = 360.0f;
             float gapDeg = kCircleProgressGapMinDeg;
             float baseStart = kCircleProgressStartDeg + kCircleProgressGapMinDeg;
             float baseEnd = kCircleProgressStartDeg - kCircleProgressGapMinDeg;
@@ -139,39 +134,52 @@ namespace pipgui
         };
 
         [[nodiscard]] CircularProgressSegments resolveCircularProgressSegments(float rawFillStart,
-                                                                              float fillSweep,
-                                                                              int16_t r,
-                                                                              uint8_t thickness) noexcept
+                                                                               float fillSweep,
+                                                                               int16_t r,
+                                                                               uint8_t thickness) noexcept
         {
             CircularProgressSegments seg;
-            seg.gapDeg = resolveCircularProgressGapDeg(r, thickness);
-            const float minSegmentDeg = circularProgressMinSegmentDeg(r, thickness);
-            const float availableSweep = circularProgressAvailableSweep(r, thickness);
+            constexpr float kMinRenderableSweepDeg = 0.01f;
 
             seg.fillStart = normalizeCircularSweep(rawFillStart);
             if (fillSweep < 0.0f)
                 fillSweep = 0.0f;
-            if (fillSweep > availableSweep)
-                fillSweep = availableSweep;
+            if (fillSweep > 360.0f)
+                fillSweep = 360.0f;
 
-            seg.fillSweep = fillSweep;
-            seg.hasFill = fillSweep >= minSegmentDeg;
-            seg.fillEnd = seg.fillStart + fillSweep;
+            const float baseRawSweep = 360.0f - fillSweep;
+            seg.gapDeg = resolveCircularProgressGapDeg(r, thickness);
+            const float halfGap = seg.gapDeg * 0.5f;
+            const float availableSweep = 360.0f - seg.gapDeg * 2.0f;
 
-            if (seg.hasFill)
+            if (fillSweep <= kMinRenderableSweepDeg)
             {
-                const float baseSweep = 360.0f - fillSweep - (seg.gapDeg * 2.0f);
-                seg.baseStart = seg.fillEnd + seg.gapDeg;
-                seg.baseEnd = seg.fillStart - seg.gapDeg;
-                seg.hasBase = baseSweep >= minSegmentDeg;
-            }
-            else
-            {
+                seg.hasFill = false;
                 seg.fillEnd = seg.fillStart;
-                seg.baseStart = kCircleProgressStartDeg + seg.gapDeg;
-                seg.baseEnd = kCircleProgressStartDeg - seg.gapDeg;
-                seg.hasBase = (360.0f - seg.gapDeg * 2.0f) >= minSegmentDeg;
+                seg.fillSweep = 0.0f;
+                seg.baseStart = 0.0f;
+                seg.baseEnd = 360.0f;
+                seg.baseSweep = 360.0f;
+                seg.hasBase = true;
+                return seg;
             }
+
+            seg.fillStart = normalizeCircularSweep(rawFillStart + halfGap);
+            seg.fillEnd = seg.fillStart + fillSweep;
+            seg.fillSweep = fillSweep;
+            seg.hasFill = true;
+
+            if (baseRawSweep <= kMinRenderableSweepDeg || fillSweep >= availableSweep)
+            {
+                seg.baseSweep = 0.0f;
+                seg.hasBase = false;
+                return seg;
+            }
+
+            seg.baseStart = seg.fillEnd + seg.gapDeg;
+            seg.baseEnd = normalizeCircularSweep(rawFillStart - halfGap);
+            seg.baseSweep = availableSweep - fillSweep;
+            seg.hasBase = seg.baseSweep > kMinRenderableSweepDeg;
 
             return seg;
         }

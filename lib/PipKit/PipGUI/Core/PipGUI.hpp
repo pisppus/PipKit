@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI.hpp"
+#include "Config/Version.hpp"
 #include "Internal/ScreenRegistry.hpp"
 
 #define SCREEN(ID, ORDER)                                                                       \
@@ -8,4 +9,3 @@
     static void __pipgui_screen_##ID(pipgui::GUI &ui);                                          \
     static ::pipgui::detail::ScreenRegistration __pipgui_reg_##ID(__pipgui_screen_##ID, ORDER); \
     static void __pipgui_screen_##ID(pipgui::GUI &ui)
-

@@ -1,6 +1,7 @@
 #include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Graphics/Utils/Easing.hpp>
+
 #include <PipGUI/Graphics/Text/Icons/Metrics.hpp>
+#include <PipGUI/Graphics/Utils/Easing.hpp>
 
 namespace pipgui
 {
@@ -184,13 +185,13 @@ namespace pipgui
             int32_t clipY = 0;
             int32_t clipW = 0;
             int32_t clipH = 0;
-             sprite->getClipRect(&clipX, &clipY, &clipW, &clipH);
-             applyClip(x, y, w, h);
-             sprite->setClipRect((int16_t)(x - _render.originX), (int16_t)(y - _render.originY), w, h);
-             drawFn();
-             _clip = prevGuiClip;
-             sprite->setClipRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
-         };
+            sprite->getClipRect(&clipX, &clipY, &clipW, &clipH);
+            applyClip(x, y, w, h);
+            sprite->setClipRect((int16_t)(x - _render.originX), (int16_t)(y - _render.originY), w, h);
+            drawFn();
+            _clip = prevGuiClip;
+            sprite->setClipRect((int16_t)clipX, (int16_t)clipY, (int16_t)clipW, (int16_t)clipH);
+        };
 
         auto measureLine = [&](const String &text, uint16_t px, uint16_t weight, int16_t &width, int16_t &height)
         {

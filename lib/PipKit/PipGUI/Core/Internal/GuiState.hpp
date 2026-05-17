@@ -2,14 +2,12 @@
 
 #include <PipCore/Display.hpp>
 #include <PipCore/Graphics/Sprite.hpp>
-#include <PipGUI/Core/Types.hpp>
-#include <PipGUI/Core/Internal/ViewModels.hpp>
-#include <PipGUI/Systems/Update/Ota.hpp>
+#include <PipCore/Storage/FileSystem.hpp>
 
-#if (PIPGUI_SCREENSHOT_MODE == 2)
-#include <FS.h>
-#include <LittleFS.h>
-#endif
+#include <PipGUI/Core/Internal/ViewModels.hpp>
+#include <PipGUI/Core/Types.hpp>
+
+#include <PipGUI/Systems/Update/Ota.hpp>
 
 namespace pipgui::detail
 {
@@ -500,7 +498,7 @@ namespace pipgui::detail
         bool thumbIndexReady = false;
         uint16_t thumbIndexW = 0;
         uint16_t thumbIndexH = 0;
-        fs::File scanDir;
+        pipcore::storage::File scanDir;
         uint8_t *rowBuf = nullptr;
         uint32_t rowBufSize = 0;
 #endif
@@ -529,7 +527,7 @@ namespace pipgui::detail
         uint16_t encOutLen = 0;
         uint8_t encOut[1024] = {};
 #if (PIPGUI_SCREENSHOT_MODE == 2)
-        fs::File file;
+        pipcore::storage::File file;
         uint32_t stamp = 0;
         char path[64] = {};
 #endif

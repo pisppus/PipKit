@@ -197,13 +197,13 @@ namespace pipgui
     }
 
     void GUI::showPopupMenuInternal(const char *const *items,
-                                   uint8_t count,
-                                   uint8_t selectedIndex,
-                                   int16_t w,
-                                   int16_t anchorX,
-                                   int16_t anchorY,
-                                   int16_t anchorW,
-                                   int16_t anchorH)
+                                    uint8_t count,
+                                    uint8_t selectedIndex,
+                                    int16_t w,
+                                    int16_t anchorX,
+                                    int16_t anchorY,
+                                    int16_t anchorW,
+                                    int16_t anchorH)
     {
         if (!items || count == 0)
             return;

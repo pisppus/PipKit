@@ -1,13 +1,19 @@
+#include <cstring>
+#include <cmath>
+
+#include <PipCore/Platforms/Select.hpp>
+
+#include <PipGUI/Core/Debug/Debug.hpp>
 #include <PipGUI/Core/GUI.hpp>
+#include <PipGUI/Core/Config/Version.hpp>
 #include <PipGUI/Core/Internal/GuiAccess.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
-#include <PipGUI/Core/Debug.hpp>
-#include <PipGUI/Systems/Network/Wifi.hpp>
+#include <PipGUI/Widgets/Data/Internal.hpp>
+
 #include <PipGUI/Graphics/Utils/Colors.hpp>
 #include <PipGUI/Graphics/Utils/Easing.hpp>
-#include <PipCore/Platforms/Select.hpp>
-#include <cstring>
-#include <math.h>
+
+#include <PipGUI/Systems/Network/Wifi.hpp>
 
 namespace pipgui
 {
@@ -156,6 +162,9 @@ namespace pipgui
                                                   logicalRotationDelta(),
                                                   stage);
         }
+
+        if (uint16_t *buf = static_cast<uint16_t *>(_render.sprite.getBuffer()))
+            Debug::drawOverlay(buf, _render.sprite.width(), x, y, w, h);
 
         _render.sprite.writeToDisplay(*_disp.display, x, y, w, h);
         reportPlatformErrorOnce(stage);
@@ -372,6 +381,8 @@ namespace pipgui
         if (area->paused == paused)
             return;
         area->paused = paused;
+        if (!paused)
+            graph_internal::invalidateGraphRenderCache(*area);
         area->pauseToggled = true;
         requestRedraw();
     }
@@ -387,7 +398,6 @@ namespace pipgui
         area->pauseToggled = false;
         return v;
     }
-
 
     static void backlightPlatformCallback(uint16_t level)
     {
@@ -602,6 +612,7 @@ namespace pipgui
         _render.physicalHeight = 0;
         _render.screenWidth = 0;
         _render.screenHeight = 0;
+        Debug::setCanvasSize(0, 0);
         _render.bgColor = 0;
         _render.bgColor565 = 0;
         _render.sprite.deleteSprite();
@@ -769,10 +780,18 @@ namespace pipgui
 #if PIPGUI_DEBUG_DIRTY_RECTS
         Debug::setDirtyRectEnabled(true);
 #endif
+#if PIPGUI_DEBUG_OVERDRAW
+        Debug::setOverdrawEnabled(true);
+#endif
+#if PIPGUI_DEBUG_LAYOUT_BOUNDS
+        Debug::setLayoutBoundsEnabled(true);
+#endif
 #if PIPGUI_DEBUG_METRICS
         _flags.statusBarDebugMetrics = true;
         Debug::init();
         _status.dirtyMask = detail::StatusBarDirtyAll;
+#elif PIPGUI_DEBUG_DIRTY_RECTS || PIPGUI_DEBUG_OVERDRAW || PIPGUI_DEBUG_LAYOUT_BOUNDS
+        Debug::init();
 #endif
 
         if (_disp.cfgConfigured)
@@ -802,6 +821,7 @@ namespace pipgui
         _render.physicalHeight = _disp.display->height();
         _render.screenWidth = _render.physicalWidth;
         _render.screenHeight = _render.physicalHeight;
+        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
         _render.bgColor = bgColor;
         _render.bgColor565 = bgColor;
         _render.originX = 0;
@@ -852,7 +872,6 @@ namespace pipgui
         _disp.brightness = _disp.brightnessMax;
 
         initFonts();
-
     }
 
     void GUI::setAdaptivePreview(uint16_t minWidth, uint16_t minHeight, uint32_t cycleMs)
@@ -875,6 +894,7 @@ namespace pipgui
         {
             _render.screenWidth = _render.physicalWidth;
             _render.screenHeight = _render.physicalHeight;
+            Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
         }
         _dirty.count = 0;
         _flags.dirtyRedrawPending = 0;
@@ -1038,6 +1058,7 @@ namespace pipgui
 
         _render.screenWidth = targetW;
         _render.screenHeight = targetH;
+        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
         _dirty.count = 0;
         _flags.dirtyRedrawPending = 0;
         _flags.needRedraw = 1;
@@ -1210,6 +1231,7 @@ namespace pipgui
         const bool quarterTurn = (((_disp.rotation - _disp.physicalRotation) & 1U) != 0U);
         _render.screenWidth = quarterTurn ? _render.physicalHeight : _render.physicalWidth;
         _render.screenHeight = quarterTurn ? _render.physicalWidth : _render.physicalHeight;
+        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
 
         _render.sprite.deleteSprite();
         _flags.spriteEnabled = _render.sprite.createSprite((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
@@ -1362,7 +1384,7 @@ namespace pipgui
         const float eased = detail::motion::easeInOutCubic(t);
         const float angle = startAngle + (deltaAngle * eased);
         const float scale = 1.0f - (0.10f * sinf(t * 3.1415926535f));
-        
+
         const uint16_t *src = (!_rotationAnim.switched || switchedThisFrame) && _rotationAnim.snapshot
                                   ? _rotationAnim.snapshot
                                   : static_cast<const uint16_t *>(_render.sprite.getBuffer());
@@ -1441,14 +1463,12 @@ namespace pipgui
     {
         [[nodiscard]] pipcore::ota::Options buildOtaOptions() noexcept
         {
+            constexpr pipgui::config::FirmwareVersion fw = pipgui::config::firmwareVersion();
             pipcore::ota::Options opt;
-            opt.currentVerMajor = static_cast<uint16_t>(PIPGUI_FIRMWARE_VER_MAJOR);
-            opt.currentVerMinor = static_cast<uint16_t>(PIPGUI_FIRMWARE_VER_MINOR);
-            opt.currentVerPatch = static_cast<uint16_t>(PIPGUI_FIRMWARE_VER_PATCH);
-            opt.currentBuild =
-                (static_cast<uint64_t>(PIPGUI_FIRMWARE_VER_MAJOR) * 1'000'000ull) +
-                (static_cast<uint64_t>(PIPGUI_FIRMWARE_VER_MINOR) * 1'000ull) +
-                static_cast<uint64_t>(PIPGUI_FIRMWARE_VER_PATCH);
+            opt.currentVerMajor = fw.major;
+            opt.currentVerMinor = fw.minor;
+            opt.currentVerPatch = fw.patch;
+            opt.currentBuild = pipgui::config::firmwareBuildNumber();
 
 #if PIPGUI_OTA
 #if !defined(PIPGUI_OTA_ED25519_PUBKEY_HEX)
@@ -1563,7 +1583,12 @@ namespace pipgui
 
     const OtaStatus &GUI::otaStatus() const noexcept
     {
+#if PIPGUI_OTA
         return pipcore::ota::status();
+#else
+        static const OtaStatus disabledStatus = {};
+        return disabledStatus;
+#endif
     }
 
     void GUI::setBacklightHandler(BacklightHandler handler) noexcept

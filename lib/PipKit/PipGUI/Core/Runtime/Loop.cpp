@@ -1,13 +1,149 @@
 #include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Core/Debug.hpp>
+#include <PipGUI/Core/Debug/Debug.hpp>
 #include <PipGUI/Systems/Network/Wifi.hpp>
 
 namespace pipgui
 {
     namespace
     {
-        constexpr uint32_t kIdleBlurCacheMs = 250;
-        constexpr uint32_t kIdleShotGalleryCacheMs = 250;
+        using DirtyRect = detail::DirtyRect;
+
+        [[nodiscard]] inline bool normalizeDirtyRect(DirtyRect &r, int16_t sw, int16_t sh) noexcept
+        {
+            if (r.w <= 0 || r.h <= 0 || sw <= 0 || sh <= 0)
+                return false;
+
+            int32_t x1 = r.x;
+            int32_t y1 = r.y;
+            int32_t x2 = x1 + r.w;
+            int32_t y2 = y1 + r.h;
+
+            if (x1 < 0)
+                x1 = 0;
+            if (y1 < 0)
+                y1 = 0;
+            if (x2 > sw)
+                x2 = sw;
+            if (y2 > sh)
+                y2 = sh;
+
+            if (x2 <= x1 || y2 <= y1)
+                return false;
+
+            r.x = (int16_t)x1;
+            r.y = (int16_t)y1;
+            r.w = (int16_t)(x2 - x1);
+            r.h = (int16_t)(y2 - y1);
+            return true;
+        }
+
+        [[nodiscard]] inline bool rectContains(const DirtyRect &a, const DirtyRect &b) noexcept
+        {
+            const int32_t ax2 = (int32_t)a.x + a.w;
+            const int32_t ay2 = (int32_t)a.y + a.h;
+            const int32_t bx2 = (int32_t)b.x + b.w;
+            const int32_t by2 = (int32_t)b.y + b.h;
+            return b.x >= a.x && b.y >= a.y && bx2 <= ax2 && by2 <= ay2;
+        }
+
+        [[nodiscard]] inline bool rectOverlapsOrEdgeTouches(const DirtyRect &a, const DirtyRect &b) noexcept
+        {
+            const int32_t ax1 = a.x;
+            const int32_t ay1 = a.y;
+            const int32_t ax2 = (int32_t)a.x + a.w;
+            const int32_t ay2 = (int32_t)a.y + a.h;
+            const int32_t bx1 = b.x;
+            const int32_t by1 = b.y;
+            const int32_t bx2 = (int32_t)b.x + b.w;
+            const int32_t by2 = (int32_t)b.y + b.h;
+
+            const int32_t ix1 = (ax1 > bx1) ? ax1 : bx1;
+            const int32_t iy1 = (ay1 > by1) ? ay1 : by1;
+            const int32_t ix2 = (ax2 < bx2) ? ax2 : bx2;
+            const int32_t iy2 = (ay2 < by2) ? ay2 : by2;
+
+            const int32_t iw = ix2 - ix1;
+            const int32_t ih = iy2 - iy1;
+            if (iw > 0 && ih > 0)
+                return true;
+
+            if (iw == 0 && ih > 0)
+                return true;
+            if (ih == 0 && iw > 0)
+                return true;
+            return false;
+        }
+
+        [[nodiscard]] inline DirtyRect rectUnion(const DirtyRect &a, const DirtyRect &b) noexcept
+        {
+            const int16_t x1 = (a.x < b.x) ? a.x : b.x;
+            const int16_t y1 = (a.y < b.y) ? a.y : b.y;
+            const int32_t ax2 = (int32_t)a.x + a.w;
+            const int32_t ay2 = (int32_t)a.y + a.h;
+            const int32_t bx2 = (int32_t)b.x + b.w;
+            const int32_t by2 = (int32_t)b.y + b.h;
+            const int32_t x2 = (ax2 > bx2) ? ax2 : bx2;
+            const int32_t y2 = (ay2 > by2) ? ay2 : by2;
+            return DirtyRect{x1, y1, (int16_t)(x2 - x1), (int16_t)(y2 - y1)};
+        }
+
+        void compactDirty(detail::DirtyState &dirty, int16_t sw, int16_t sh) noexcept
+        {
+            if (dirty.count <= 1)
+                return;
+
+            uint8_t out = 0;
+            for (uint8_t i = 0; i < dirty.count; ++i)
+            {
+                DirtyRect r = dirty.rects[i];
+                if (!normalizeDirtyRect(r, sw, sh))
+                    continue;
+                dirty.rects[out++] = r;
+            }
+            dirty.count = out;
+            if (dirty.count <= 1)
+                return;
+
+            for (uint8_t i = 0; i < dirty.count; ++i)
+            {
+                for (uint8_t j = 0; j < dirty.count;)
+                {
+                    if (i == j)
+                    {
+                        ++j;
+                        continue;
+                    }
+                    if (rectContains(dirty.rects[i], dirty.rects[j]))
+                    {
+                        dirty.rects[j] = dirty.rects[dirty.count - 1];
+                        --dirty.count;
+                        continue;
+                    }
+                    ++j;
+                }
+            }
+            if (dirty.count <= 1)
+                return;
+
+            bool changed = true;
+            while (changed && dirty.count > 1)
+            {
+                changed = false;
+                for (uint8_t i = 0; i < dirty.count && !changed; ++i)
+                {
+                    for (uint8_t j = (uint8_t)(i + 1); j < dirty.count; ++j)
+                    {
+                        if (!rectOverlapsOrEdgeTouches(dirty.rects[i], dirty.rects[j]))
+                            continue;
+                        dirty.rects[i] = rectUnion(dirty.rects[i], dirty.rects[j]);
+                        dirty.rects[j] = dirty.rects[dirty.count - 1];
+                        --dirty.count;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     void GUI::loopTiled(uint32_t now)
@@ -31,7 +167,7 @@ namespace pipgui
             flushPendingGraphRender(_screen.current);
 
 #if PIPGUI_SCREENSHOTS && (PIPGUI_SCREENSHOT_MODE == 2)
-        const bool galleryHot = (_shots.lastUseMs != 0) && ((now - _shots.lastUseMs) <= kIdleShotGalleryCacheMs);
+        const bool galleryHot = (_shots.lastUseMs != 0) && ((now - _shots.lastUseMs) <= 250);
         if (galleryHot)
         {
             serviceScreenshotGalleryFlash();
@@ -77,6 +213,9 @@ namespace pipgui
         _popup.lastRectValid = curPopupVisible;
         _toast.lastRect = curToast;
         _toast.lastRectValid = curToastVisible;
+
+        if (_dirty.count > 1)
+            compactDirty(_dirty, sw, sh);
 
         const bool overlaysActive = overlaysFullFrame;
         const bool canDirtyRedraw = (_flags.needRedraw && _flags.dirtyRedrawPending && _dirty.count > 0 &&
@@ -219,6 +358,7 @@ namespace pipgui
                     _flags.inSpritePass = prevRender;
                 }
 
+                Debug::drawOverlay(buf, stride, 0, tileY, sw, h, tileY);
                 _disp.display->writeRect565(0, tileY, sw, h, buf, stride);
                 reportPlatformErrorOnce("tiled-present");
             }
@@ -272,16 +412,14 @@ namespace pipgui
                     continue;
 
                 tileHasDirty = true;
-                if (dirty.x < clipUx1)
-                    clipUx1 = dirty.x;
-                if (dirty.y < clipUy1)
-                    clipUy1 = dirty.y;
-                const int16_t ex = (int16_t)((int32_t)dirty.x + dirty.w);
-                const int16_t ey = (int16_t)((int32_t)dirty.y + dirty.h);
-                if (ex > clipUx2)
-                    clipUx2 = ex;
-                if (ey > clipUy2)
-                    clipUy2 = ey;
+                if (x1 < clipUx1)
+                    clipUx1 = x1;
+                if (y1 < clipUy1)
+                    clipUy1 = y1;
+                if (x2 > clipUx2)
+                    clipUx2 = x2;
+                if (y2 > clipUy2)
+                    clipUy2 = y2;
             }
 
             if (!tileHasDirty)
@@ -343,6 +481,7 @@ namespace pipgui
                 drawDirtyOverlayTile(dirty, tileY, tileBottom);
 
                 const int16_t srcY = (int16_t)(y1 - tileY);
+                Debug::drawOverlay(buf, stride, x1, y1, w, h, tileY);
                 _disp.display->writeRect565(x1, y1, w, h, buf + (size_t)srcY * stride + x1, stride);
                 reportPlatformErrorOnce("tiled-present-dirty");
             }
@@ -635,7 +774,11 @@ namespace pipgui
                             return;
                         }
                         if (_dirty.count > 0)
+                        {
+                            if (_dirty.count > 1)
+                                compactDirty(_dirty, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
                             flushDirty();
+                        }
                         return;
                     }
 
@@ -652,12 +795,18 @@ namespace pipgui
                             return;
                         }
                         if (_dirty.count > 0)
+                        {
+                            if (_dirty.count > 1)
+                                compactDirty(_dirty, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
                             flushDirty();
+                        }
                         return;
                     }
 
                     if (!overlaysActive && _flags.dirtyRedrawPending && _dirty.count > 0)
                     {
+                        if (_dirty.count > 1)
+                            compactDirty(_dirty, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
                         renderCurrentScreenDirty(currentCb, _screen.current);
                         renderStatusBar();
                         _flags.dirtyRedrawPending = 0;
@@ -669,7 +818,11 @@ namespace pipgui
                             return;
                         }
                         if (_dirty.count > 0)
+                        {
+                            if (_dirty.count > 1)
+                                compactDirty(_dirty, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
                             flushDirty();
+                        }
                         return;
                     }
 
@@ -716,9 +869,13 @@ namespace pipgui
             serviceOverlays(false);
         if (!_flags.needRedraw && _dirty.count > 0 && _flags.spriteEnabled && _disp.display &&
             !_flags.toastActive && !_toast.lastRectValid && !_flags.popupActive && !_popup.lastRectValid)
+        {
+            if (_dirty.count > 1)
+                compactDirty(_dirty, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
             flushDirty();
+        }
 
-        if (_blur.lastUseMs != 0 && (now - _blur.lastUseMs) > kIdleBlurCacheMs)
+        if (_blur.lastUseMs != 0 && (now - _blur.lastUseMs) > 250)
         {
             freeBlurBuffers(platform());
             _blur.lastUseMs = 0;

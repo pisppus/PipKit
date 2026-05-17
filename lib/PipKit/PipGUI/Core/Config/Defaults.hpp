@@ -20,35 +20,35 @@
 #define PIPGUI_STATUS_BAR 0
 #endif
 
-// WiFi
 #ifndef PIPGUI_WIFI
 #define PIPGUI_WIFI 0
 #endif
 #ifndef PIPGUI_WIFI_SSID
-#define PIPGUI_WIFI_SSID "EXAMPLE_WIFI_SSID"
+#define PIPGUI_WIFI_SSID ""
 #endif
 #ifndef PIPGUI_WIFI_PASSWORD
-#define PIPGUI_WIFI_PASSWORD "EXAMPLE_WIFI_PASSWORD"
+#define PIPGUI_WIFI_PASSWORD ""
 #endif
 
-// OTA updater
 #ifndef PIPGUI_OTA
 #define PIPGUI_OTA 0
 #endif
 #ifndef PIPGUI_OTA_PROJECT_URL
-#define PIPGUI_OTA_PROJECT_URL "https://pisppus.is-a.dev/fw/pipboy"
+#define PIPGUI_OTA_PROJECT_URL "https://pisppus.is-a.dev/fw/project"
 #endif
 
 #ifndef PIPGUI_FIRMWARE_TITLE
-#define PIPGUI_FIRMWARE_TITLE "PipGUI"
+#define PIPGUI_FIRMWARE_TITLE "PipKit"
 #endif
 
-#ifndef PIPGUI_FIRMWARE_VER_MAJOR
-#define PIPGUI_FIRMWARE_VER_MAJOR 1
+#ifndef PIPGUI_FIRMWARE_VERSION
+#define PIPGUI_FIRMWARE_VERSION "1.6.1"
 #endif
-#ifndef PIPGUI_FIRMWARE_VER_MINOR
-#define PIPGUI_FIRMWARE_VER_MINOR 0
+
+#ifndef PIPGUI_DEBUG_OVERDRAW
+#define PIPGUI_DEBUG_OVERDRAW 0
 #endif
-#ifndef PIPGUI_FIRMWARE_VER_PATCH
-#define PIPGUI_FIRMWARE_VER_PATCH 3
+
+#ifndef PIPGUI_DEBUG_LAYOUT_BOUNDS
+#define PIPGUI_DEBUG_LAYOUT_BOUNDS 0
 #endif

@@ -1,8 +1,11 @@
-#include <PipGUI/Core/GUI.hpp>
 #include "Blend.hpp"
+
+#include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Graphics/Utils/BlueNoise.hpp>
 #include <PipGUI/Graphics/Utils/Colors.hpp>
+
 #include <PipCore/Graphics/Sprite.hpp>
+
 #include <cstring>
 
 namespace pipgui

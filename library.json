@@ -1,6 +1,6 @@
 {
   "name": "PipKit",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "High-performance embedded GUI toolkit for ESP32 ST7789 displays on Arduino.",
   "keywords": [
     "gui",
@@ -32,6 +32,12 @@
   "headers": "PipKit.hpp",
   "build": {
     "includeDir": "lib/pipKit",
-    "srcDir": "lib/PipKit"
+    "srcDir": "lib/PipKit",
+    "srcFilter": [
+      "+<**/*.cpp>",
+      "-<PipCore/Host/Desktop/**>",
+      "-<PipCore/Platforms/Desktop/**>",
+      "-<PipCore/Displays/Simulator/**>"
+    ]
   }
 }

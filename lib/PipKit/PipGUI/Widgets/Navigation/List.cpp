@@ -1,8 +1,11 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Core/Internal/GuiAccess.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
+
 #include <PipGUI/Graphics/Utils/Colors.hpp>
-#include <math.h>
+
+#include <cmath>
+
 namespace pipgui
 {
     namespace
@@ -376,6 +379,13 @@ namespace pipgui
             const int16_t contentBottom = bottom - padY;
             if (contentBottom <= contentTop)
                 return;
+            debugRecordLayoutRectGlobal(left, top, w, h);
+            debugRecordLayoutRectGlobal(left, contentTop, w, (int16_t)(contentBottom - contentTop));
+            if (padY > 0)
+            {
+                debugRecordSpacingRectGlobal(left, top, w, padY);
+                debugRecordSpacingRectGlobal(left, contentBottom, w, (int16_t)(bottom - contentBottom));
+            }
 
             const bool cardMode = (menu.style.mode == Cards);
             const int16_t marginX = 1;
@@ -461,6 +471,7 @@ namespace pipgui
                 constexpr int16_t scrollbarWidth = 3;
                 constexpr int16_t scrollbarGap = 2;
                 contentRight = right - (scrollbarWidth + scrollbarGap);
+                debugRecordSpacingRectGlobal(contentRight, contentTop, (int16_t)(right - contentRight), (int16_t)(contentBottom - contentTop));
                 if (menu.style.cardWidth <= 0)
                 {
                     cardX = left + marginX;
@@ -688,6 +699,9 @@ namespace pipgui
                 const bool checked = (i == menu.checkedIndex) && menu.checkedIconId != 0xFFFF;
                 const uint16_t bg = active ? menu.style.cardActiveColor : (cardMode ? menu.style.cardColor : bgColor565);
                 const uint16_t textColor = detail::autoTextColor(bg);
+                debugRecordLayoutRectGlobal(cardX, itemY, cardW, cardH);
+                if (spacingY > 0 && itemIndex > 0)
+                    debugRecordSpacingRectGlobal(cardX, (int16_t)(itemY - spacingY), cardW, spacingY);
 
                 if (!cardMode)
                 {
@@ -710,6 +724,7 @@ namespace pipgui
                     const int16_t itemClipH = cardH - 4;
                     if (itemClipH <= 0 || item.titleH > itemClipH)
                         continue;
+                    debugRecordLayoutRectGlobal(textClipX, itemClipY, textClipW, itemClipH);
 
                     float baseY = posY + 2.0f + (float)(itemClipH - item.titleH) * 0.5f;
                     if (baseY < (float)itemClipY)
@@ -806,6 +821,7 @@ namespace pipgui
                 const int16_t itemClipH = cardH - 8;
                 if (itemClipH <= 0 || item.titleH > itemClipH)
                     continue;
+                debugRecordLayoutRectGlobal(textClipX, itemClipY, textClipW, itemClipH);
 
                 bool showSub = hasSub && subPx > 0 && item.subH > 0;
                 int16_t totalH = item.titleH;

@@ -1,0 +1,22 @@
+{
+  "name": "PipKit",
+  "version": "1.6.1",
+  "description": "High-performance embedded GUI toolkit for ESP32 firmware projects.",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "headers": "PipKit.hpp",
+  "build": {
+    "includeDir": ".",
+    "srcDir": ".",
+    "srcFilter": [
+      "+<**/*.cpp>",
+      "-<PipCore/Host/Desktop/**>",
+      "-<PipCore/Platforms/Desktop/**>",
+      "-<PipCore/Displays/Simulator/**>"
+    ]
+  }
+}

@@ -1,4 +1,5 @@
 #include <PipGUI/Systems/Screenshots/Internals.hpp>
+
 #include <cstdio>
 #include <cstring>
 
@@ -17,7 +18,7 @@ namespace pipgui
         [[nodiscard]] bool readShotsCounter(uint32_t &out) noexcept
         {
             out = 0;
-            fs::File f = LittleFS.open(kCounterPath, FILE_READ);
+            pipcore::storage::File f = pipcore::storage::open(kCounterPath, pipcore::storage::OpenMode::Read);
             if (!f)
                 return false;
 
@@ -35,7 +36,7 @@ namespace pipgui
 
             out = static_cast<uint32_t>(v);
             return true;
-        } 
+        }
 
         void writeShotsCounter(uint32_t value) noexcept
         {
@@ -43,7 +44,7 @@ namespace pipgui
             if (!ssd::tmpPathFromFinal(tmp, sizeof(tmp), kCounterPath))
                 return;
 
-            fs::File f = LittleFS.open(tmp, FILE_WRITE);
+            pipcore::storage::File f = pipcore::storage::open(tmp, pipcore::storage::OpenMode::Write);
             if (!f)
                 return;
 
@@ -60,25 +61,25 @@ namespace pipgui
 
             if (ok)
             {
-                if (!LittleFS.rename(tmp, kCounterPath))
-                    LittleFS.remove(tmp);
+                if (!pipcore::storage::rename(tmp, kCounterPath))
+                    (void)pipcore::storage::remove(tmp);
             }
             else
             {
-                LittleFS.remove(tmp);
+                (void)pipcore::storage::remove(tmp);
             }
         }
 
         [[nodiscard]] uint32_t scanMaxShotStamp() noexcept
         {
-            fs::File d = LittleFS.open(ssd::kShotsDir);
+            pipcore::storage::File d = pipcore::storage::open(ssd::kShotsDir);
             if (!d)
                 return 0;
 
             uint32_t maxStamp = 0;
             while (true)
             {
-                fs::File file = d.openNextFile();
+                pipcore::storage::File file = d.openNextFile();
                 if (!file)
                     break;
                 if (file.isDirectory())
@@ -225,7 +226,7 @@ namespace pipgui
 #if (PIPGUI_SCREENSHOT_MODE == 2)
         if (!_shots.fsReady)
         {
-            _shots.fsReady = LittleFS.begin(false);
+            _shots.fsReady = pipcore::storage::begin(false);
             _shots.fsDirsReady = false;
             if (!_shots.fsReady)
             {
@@ -243,7 +244,7 @@ namespace pipgui
         char path[64];
         char tmpPath[64];
         uint32_t stamp = 0;
-        fs::File f;
+        pipcore::storage::File f;
         for (uint8_t attempt = 0; attempt < 8; ++attempt)
         {
             stamp = allocShotStamp();
@@ -253,7 +254,7 @@ namespace pipgui
             std::snprintf(tmpPath, sizeof(tmpPath), "%s/pscr_%08lu.tmp",
                           ssd::kShotsDir,
                           static_cast<unsigned long>(stamp));
-            f = LittleFS.open(tmpPath, FILE_WRITE);
+            f = pipcore::storage::open(tmpPath, pipcore::storage::OpenMode::Write);
             if (f)
                 break;
         }
@@ -380,9 +381,9 @@ namespace pipgui
             {
                 if (ok)
                 {
-                    if (!LittleFS.rename(tmpPath, _shotStream.path))
+                    if (!pipcore::storage::rename(tmpPath, _shotStream.path))
                     {
-                        LittleFS.remove(tmpPath);
+                        (void)pipcore::storage::remove(tmpPath);
                         ok = false;
                     }
                     else
@@ -392,7 +393,7 @@ namespace pipgui
                 }
                 else
                 {
-                    LittleFS.remove(tmpPath);
+                    (void)pipcore::storage::remove(tmpPath);
                 }
             }
 

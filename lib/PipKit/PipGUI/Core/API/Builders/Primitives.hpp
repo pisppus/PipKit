@@ -23,48 +23,42 @@ namespace pipgui
         ~DrawRectFluent() { draw(); }
         DrawRectFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         DrawRectFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         DrawRectFluent &fill(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             _hasFill = true;
             return *this;
         }
         DrawRectFluent &border(uint8_t width, uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _borderWidth = width;
             _borderColor = c;
             return *this;
         }
         DrawRectFluent &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             _perCorner = false;
             return *this;
         }
         DrawRectFluent &radius(uint8_t tl, uint8_t tr, uint8_t br, uint8_t bl)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radiusTL = tl;
             _radiusTR = tr;
             _radiusBR = br;
@@ -84,45 +78,39 @@ namespace pipgui
         ~GradientVerticalFluent() { draw(); }
         GradientVerticalFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GradientVerticalFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         GradientVerticalFluent &TColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _topColor = c;
             return *this;
         }
         GradientVerticalFluent &TColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _topColor = detail::color565To888(c565);
             return *this;
         }
         GradientVerticalFluent &BColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bottomColor = c;
             return *this;
         }
         GradientVerticalFluent &BColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bottomColor = detail::color565To888(c565);
             return *this;
         }
@@ -138,45 +126,39 @@ namespace pipgui
         ~GradientHorizontalFluent() { draw(); }
         GradientHorizontalFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GradientHorizontalFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         GradientHorizontalFluent &LColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _leftColor = c;
             return *this;
         }
         GradientHorizontalFluent &LColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _leftColor = detail::color565To888(c565);
             return *this;
         }
         GradientHorizontalFluent &RColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _rightColor = c;
             return *this;
         }
         GradientHorizontalFluent &RColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _rightColor = detail::color565To888(c565);
             return *this;
         }
@@ -192,73 +174,63 @@ namespace pipgui
         ~GradientCornersFluent() { draw(); }
         GradientCornersFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GradientCornersFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         GradientCornersFluent &TLColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c00 = color;
             return *this;
         }
         GradientCornersFluent &TLColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c00 = detail::color565To888(color565);
             return *this;
         }
         GradientCornersFluent &TRColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c10 = color;
             return *this;
         }
         GradientCornersFluent &TRColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c10 = detail::color565To888(color565);
             return *this;
         }
         GradientCornersFluent &BLColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c01 = color;
             return *this;
         }
         GradientCornersFluent &BLColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c01 = detail::color565To888(color565);
             return *this;
         }
         GradientCornersFluent &BRColor(uint32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c11 = color;
             return *this;
         }
         GradientCornersFluent &BRColor(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _c11 = detail::color565To888(color565);
             return *this;
         }
@@ -274,45 +246,39 @@ namespace pipgui
         ~GradientDiagonalFluent() { draw(); }
         GradientDiagonalFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GradientDiagonalFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         GradientDiagonalFluent &TLColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _tlColor = c;
             return *this;
         }
         GradientDiagonalFluent &TLColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _tlColor = detail::color565To888(c565);
             return *this;
         }
         GradientDiagonalFluent &BRColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _brColor = c;
             return *this;
         }
         GradientDiagonalFluent &BRColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _brColor = detail::color565To888(c565);
             return *this;
         }
@@ -330,60 +296,52 @@ namespace pipgui
         ~GradientRadialFluent() { draw(); }
         GradientRadialFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GradientRadialFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         GradientRadialFluent &center(int16_t cx, int16_t cy)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cx = cx;
             _cy = cy;
             return *this;
         }
         GradientRadialFluent &radius(int16_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
         GradientRadialFluent &innerColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _innerColor = c;
             return *this;
         }
         GradientRadialFluent &innerColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _innerColor = detail::color565To888(c565);
             return *this;
         }
         GradientRadialFluent &outerColor(uint32_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _outerColor = c;
             return *this;
         }
         GradientRadialFluent &outerColor(uint16_t c565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _outerColor = detail::color565To888(c565);
             return *this;
         }
@@ -400,31 +358,27 @@ namespace pipgui
         ~DrawLineFluent() { draw(); }
         DrawLineFluent &from(int16_t x0, int16_t y0)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x0 = x0;
             _y0 = y0;
             return *this;
         }
         DrawLineFluent &to(int16_t x1, int16_t y1)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x1 = x1;
             _y1 = y1;
             return *this;
         }
         DrawLineFluent &thickness(uint8_t t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _thickness = t;
             return *this;
         }
         DrawLineFluent &color(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = c;
             return *this;
         }
@@ -444,31 +398,27 @@ namespace pipgui
         ~DrawCircleFluent() { draw(); }
         DrawCircleFluent &pos(int16_t cx, int16_t cy)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cx = cx;
             _cy = cy;
             return *this;
         }
         DrawCircleFluent &radius(int16_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _r = r;
             return *this;
         }
         DrawCircleFluent &fill(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             _hasFill = true;
             return *this;
         }
         DrawCircleFluent &border(uint8_t width, uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _borderWidth = width;
             _borderColor = c;
             return *this;
@@ -488,44 +438,38 @@ namespace pipgui
         ~DrawArcFluent() { draw(); }
         DrawArcFluent &pos(int16_t cx, int16_t cy)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cx = cx;
             _cy = cy;
             return *this;
         }
         DrawArcFluent &radius(int16_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _r = r;
             return *this;
         }
         DrawArcFluent &thickness(uint8_t t)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _thickness = t;
             return *this;
         }
         DrawArcFluent &start(float d)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _startDeg = d;
             return *this;
         }
         DrawArcFluent &end(float d)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _endDeg = d;
             return *this;
         }
         DrawArcFluent &color(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _color = c;
             return *this;
         }
@@ -545,38 +489,33 @@ namespace pipgui
         ~DrawEllipseFluent() { draw(); }
         DrawEllipseFluent &pos(int16_t cx, int16_t cy)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cx = cx;
             _cy = cy;
             return *this;
         }
         DrawEllipseFluent &radiusX(int16_t rx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _rx = rx;
             return *this;
         }
         DrawEllipseFluent &radiusY(int16_t ry)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _ry = ry;
             return *this;
         }
         DrawEllipseFluent &fill(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             _hasFill = true;
             return *this;
         }
         DrawEllipseFluent &border(uint8_t width, uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _borderWidth = width;
             _borderColor = c;
             return *this;
@@ -597,48 +536,42 @@ namespace pipgui
         ~DrawTriangleFluent() { draw(); }
         DrawTriangleFluent &point0(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x0 = x;
             _y0 = y;
             return *this;
         }
         DrawTriangleFluent &point1(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x1 = x;
             _y1 = y;
             return *this;
         }
         DrawTriangleFluent &point2(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x2 = x;
             _y2 = y;
             return *this;
         }
         DrawTriangleFluent &fill(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             _hasFill = true;
             return *this;
         }
         DrawTriangleFluent &border(uint8_t width, uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _borderWidth = width;
             _borderColor = c;
             return *this;
         }
         DrawTriangleFluent &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
@@ -664,32 +597,28 @@ namespace pipgui
         ~DrawSquircleRectFluent() { draw(); }
         DrawSquircleRectFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         DrawSquircleRectFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         DrawSquircleRectFluent &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             _perCorner = false;
             return *this;
         }
         DrawSquircleRectFluent &radius(uint8_t tl, uint8_t tr, uint8_t br, uint8_t bl)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radiusTL = tl;
             _radiusTR = tr;
             _radiusBR = br;
@@ -699,16 +628,14 @@ namespace pipgui
         }
         DrawSquircleRectFluent &fill(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             _hasFill = true;
             return *this;
         }
         DrawSquircleRectFluent &border(uint8_t width, uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _borderWidth = width;
             _borderColor = c;
             return *this;

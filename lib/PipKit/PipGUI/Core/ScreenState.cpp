@@ -1,7 +1,8 @@
-#include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Core/Internal/ViewModels.hpp>
 #include <algorithm>
 #include <new>
+
+#include <PipGUI/Core/GUI.hpp>
+#include <PipGUI/Core/Internal/ViewModels.hpp>
 
 namespace pipgui
 {

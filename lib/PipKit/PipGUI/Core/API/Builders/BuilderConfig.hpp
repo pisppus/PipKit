@@ -17,8 +17,7 @@ namespace pipgui
 
         ConfigDisplayFluent &pins(const DisplayPins &p)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.mosi = p.mosi;
             _cfg.sclk = p.sclk;
             _cfg.cs = p.cs;
@@ -30,8 +29,7 @@ namespace pipgui
 
         ConfigDisplayFluent &pins(int8_t mosi, int8_t sclk, int8_t cs, int8_t dc, int8_t rst)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.mosi = mosi;
             _cfg.sclk = sclk;
             _cfg.cs = cs;
@@ -43,8 +41,7 @@ namespace pipgui
 
         ConfigDisplayFluent &size(uint16_t w, uint16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.width = w;
             _cfg.height = h;
             _touched = true;
@@ -53,8 +50,7 @@ namespace pipgui
 
         ConfigDisplayFluent &hz(uint32_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.hz = v;
             _touched = true;
             return *this;
@@ -62,8 +58,7 @@ namespace pipgui
 
         ConfigDisplayFluent &order(const char *v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             if (!v)
                 return *this;
 
@@ -77,8 +72,7 @@ namespace pipgui
 
         ConfigDisplayFluent &invert(bool v = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.invert = v;
             _touched = true;
             return *this;
@@ -86,8 +80,7 @@ namespace pipgui
 
         ConfigDisplayFluent &swap(bool v = true)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.swap = v;
             _touched = true;
             return *this;
@@ -95,8 +88,7 @@ namespace pipgui
 
         ConfigDisplayFluent &offset(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cfg.xOffset = x;
             _cfg.yOffset = y;
             _touched = true;
@@ -124,8 +116,7 @@ namespace pipgui
 
         ConfigureBacklightFluent &pin(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _pin = v;
             _touched = true;
             return *this;
@@ -133,8 +124,7 @@ namespace pipgui
 
         ConfigureBacklightFluent &channel(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _channel = v;
             _touched = true;
             return *this;
@@ -142,8 +132,7 @@ namespace pipgui
 
         ConfigureBacklightFluent &freq(uint32_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _freqHz = v;
             _touched = true;
             return *this;
@@ -151,8 +140,7 @@ namespace pipgui
 
         ConfigureBacklightFluent &resolution(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _resolutionBits = v;
             _touched = true;
             return *this;
@@ -179,8 +167,7 @@ namespace pipgui
 
         SetClipFluent &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             _touched = true;
@@ -189,8 +176,7 @@ namespace pipgui
 
         SetClipFluent &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             _touched = true;
@@ -217,8 +203,7 @@ namespace pipgui
 
         ShowLogoFluent &text(const String &title, const String &subtitle = "")
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _title = title;
             _subtitle = subtitle;
             _touched = true;
@@ -227,8 +212,7 @@ namespace pipgui
 
         ShowLogoFluent &anim(BootAnimation v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _anim = v;
             _touched = true;
             return *this;
@@ -253,24 +237,21 @@ namespace pipgui
 
         ConfigStatusBarFluent &height(uint8_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _height = v;
             return *this;
         }
 
         ConfigStatusBarFluent &pos(StatusBarPosition v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _pos = v;
             return *this;
         }
 
         ConfigStatusBarFluent &style(StatusBarStyle v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _style = v;
             return *this;
         }
@@ -294,24 +275,21 @@ namespace pipgui
 
         SetStatusBarTextFluent &left(const String &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _left = v;
             return *this;
         }
 
         SetStatusBarTextFluent &center(const String &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _center = v;
             return *this;
         }
 
         SetStatusBarTextFluent &right(const String &v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _right = v;
             return *this;
         }
@@ -338,8 +316,7 @@ namespace pipgui
 
         SetStatusBarIconFluent &side(TextAlign v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _side = v;
             _hasSide = true;
             return *this;
@@ -347,8 +324,7 @@ namespace pipgui
 
         SetStatusBarIconFluent &icon(IconId v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _iconId = v;
             _hasIcon = true;
             return *this;
@@ -356,16 +332,14 @@ namespace pipgui
 
         SetStatusBarIconFluent &color(int32_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_color565, v);
             return *this;
         }
 
         SetStatusBarIconFluent &size(uint16_t v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _sizePx = v;
             return *this;
         }
@@ -388,24 +362,21 @@ namespace pipgui
 
         ListInputFluent &nextDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _nextDown = v;
             return *this;
         }
 
         ListInputFluent &prevDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _prevDown = v;
             return *this;
         }
 
         ListInputFluent &selectDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _selectDown = v;
             _hasSelect = true;
             return *this;
@@ -432,24 +403,21 @@ namespace pipgui
 
         PopupMenuInputFluent &nextDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _nextDown = v;
             return *this;
         }
 
         PopupMenuInputFluent &prevDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _prevDown = v;
             return *this;
         }
 
         PopupMenuInputFluent &selectDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _selectDown = v;
             _hasSelect = true;
             return *this;
@@ -543,8 +511,7 @@ namespace pipgui
         template <typename... Rest>
         UpdateListFluent &items(ListItemDef first, Rest... rest)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             const ListItemDef packed[] = {first, static_cast<ListItemDef>(rest)...};
             const uint8_t count = static_cast<uint8_t>(1 + sizeof...(rest));
             ListItemDef *copy = _ownedItems.copyFromPtr(packed, count);
@@ -557,32 +524,28 @@ namespace pipgui
 
         UpdateListFluent &inactive(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cardColor = color565;
             return *this;
         }
 
         UpdateListFluent &active(uint16_t color565)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cardActiveColor = color565;
             return *this;
         }
 
         UpdateListFluent &radius(uint8_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = px;
             return *this;
         }
 
         UpdateListFluent &cardSize(int16_t width, int16_t height)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cardWidth = width;
             _cardHeight = height;
             return *this;
@@ -590,16 +553,14 @@ namespace pipgui
 
         UpdateListFluent &mode(ListMode m)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _mode = m;
             return *this;
         }
 
         UpdateListFluent &checked(uint8_t idx)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _checkedIndex = idx;
             return *this;
         }
@@ -625,24 +586,21 @@ namespace pipgui
 
         TileInputFluent &nextDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _nextDown = v;
             return *this;
         }
 
         TileInputFluent &prevDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _prevDown = v;
             return *this;
         }
 
         TileInputFluent &selectDown(bool v)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _selectDown = v;
             _hasSelect = true;
             return *this;
@@ -769,8 +727,7 @@ namespace pipgui
 
         UpdateTileFluent &grid(uint8_t cols, uint8_t rows)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _itemCount = 0;
             _lastTileIndex = 0xFF;
             _gridCols = cols;
@@ -782,8 +739,7 @@ namespace pipgui
         template <typename... Rest>
         UpdateTileFluent &items(TileItemDef first, Rest... rest)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             const TileItemDef packed[] = {first, static_cast<TileItemDef>(rest)...};
             const uint8_t count = static_cast<uint8_t>(1 + sizeof...(rest));
             TileItemDef *copy = _ownedItems.copyFromPtr(packed, count);
@@ -799,8 +755,7 @@ namespace pipgui
 
         UpdateTileFluent &tile(const char *title, const char *subtitle, uint8_t target)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             if (!_customLayout)
             {
                 _itemCount = 0;
@@ -821,8 +776,7 @@ namespace pipgui
 
         UpdateTileFluent &tile(uint16_t icon, const char *title, const char *subtitle, uint8_t target)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             if (!_customLayout)
             {
                 _itemCount = 0;
@@ -861,48 +815,42 @@ namespace pipgui
 
         UpdateTileFluent &inactive(uint32_t color888)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cardColor = color888;
             return *this;
         }
 
         UpdateTileFluent &active(uint32_t color888)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _cardActiveColor = color888;
             return *this;
         }
 
         UpdateTileFluent &radius(uint8_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = px;
             return *this;
         }
 
         UpdateTileFluent &spacing(uint8_t px)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _spacing = px;
             return *this;
         }
 
         UpdateTileFluent &columns(uint8_t value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _columns = value;
             return *this;
         }
 
         UpdateTileFluent &tileSize(int16_t width, int16_t height)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _tileWidth = width;
             _tileHeight = height;
             return *this;
@@ -910,8 +858,7 @@ namespace pipgui
 
         UpdateTileFluent &mode(TileMode value)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _contentMode = value;
             return *this;
         }

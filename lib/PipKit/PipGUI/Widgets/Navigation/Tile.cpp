@@ -1,7 +1,9 @@
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Core/Internal/GuiAccess.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
+
 #include <PipGUI/Graphics/Utils/Colors.hpp>
+
 #include <algorithm>
 
 namespace pipgui
@@ -719,9 +721,34 @@ namespace pipgui
             .size(viewport.usableW, viewport.usableH)
             .fill(_render.bgColor)
             .draw();
+        debugRecordLayoutRectGlobal(viewport.left, viewport.top, viewport.usableW, viewport.usableH);
 
         TileGridMetrics grid;
         resolveTileGrid(m, viewport, grid);
+        const int16_t gridW = (int16_t)(grid.cols * grid.unitW + (grid.cols > 0 ? (grid.cols - 1) * grid.spacing : 0));
+        const int16_t gridH = (int16_t)(grid.rows * grid.unitH + (grid.rows > 0 ? (grid.rows - 1) * grid.spacing : 0));
+        debugRecordLayoutRectGlobal(grid.gridX, grid.gridY, gridW, gridH);
+        if (grid.gridX > viewport.left)
+            debugRecordSpacingRectGlobal(viewport.left, viewport.top, (int16_t)(grid.gridX - viewport.left), viewport.usableH);
+        if (grid.gridY > viewport.top)
+            debugRecordSpacingRectGlobal(viewport.left, viewport.top, viewport.usableW, (int16_t)(grid.gridY - viewport.top));
+        if (grid.gridX + gridW < viewport.right)
+            debugRecordSpacingRectGlobal((int16_t)(grid.gridX + gridW), viewport.top, (int16_t)(viewport.right - (grid.gridX + gridW)), viewport.usableH);
+        if (grid.gridY + gridH < viewport.bottom)
+            debugRecordSpacingRectGlobal(viewport.left, (int16_t)(grid.gridY + gridH), viewport.usableW, (int16_t)(viewport.bottom - (grid.gridY + gridH)));
+        if (grid.spacing > 0)
+        {
+            for (uint8_t col = 1; col < grid.cols; ++col)
+            {
+                const int16_t gapX = (int16_t)(grid.gridX + col * grid.unitW + (col - 1) * grid.spacing);
+                debugRecordSpacingRectGlobal(gapX, grid.gridY, grid.spacing, gridH);
+            }
+            for (uint8_t row = 1; row < grid.rows; ++row)
+            {
+                const int16_t gapY = (int16_t)(grid.gridY + row * grid.unitH + (row - 1) * grid.spacing);
+                debugRecordSpacingRectGlobal(grid.gridX, gapY, gridW, grid.spacing);
+            }
+        }
 
         auto setTextFont = [&](uint16_t weight, uint16_t px)
         {
@@ -796,6 +823,7 @@ namespace pipgui
         {
             int16_t x = 0, y = 0, tileW = 0, tileH = 0;
             tileRectAtIndex(m, i, grid, x, y, tileW, tileH);
+            debugRecordLayoutRectGlobal(x, y, tileW, tileH);
 
             const uint16_t bg = detail::color888To565((i == m.selectedIndex) ? m.style.cardActiveColor : m.style.cardColor);
             drawSquircleRect().pos(x, y).size(tileW, tileH).radius(grid.radius).fill(bg);
@@ -819,6 +847,7 @@ namespace pipgui
             const int16_t contentClipH = tileH - innerPadY * 2;
             if (contentClipW <= 0 || contentClipH <= 0)
                 continue;
+            debugRecordLayoutRectGlobal(contentClipX, contentClipY, contentClipW, contentClipH);
 
             const float previewScaleY = adaptivePreviewScaleY(_render.physicalHeight, _render.screenHeight);
             const uint16_t baseTitlePx = hasSub ? 18 : 20;

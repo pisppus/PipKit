@@ -1,5 +1,6 @@
 #include <PipGUI/Systems/Screenshots/Internals.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
+
 #include <algorithm>
 #include <cstring>
 

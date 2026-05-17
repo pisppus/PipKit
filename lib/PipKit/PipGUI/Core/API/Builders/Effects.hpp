@@ -27,38 +27,33 @@ namespace pipgui
         ~BlurRegionFluentT() { draw(); }
         BlurRegionFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         BlurRegionFluentT &size(int16_t w, int16_t h)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _w = w;
             _h = h;
             return *this;
         }
         BlurRegionFluentT &radius(uint8_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _radius = r;
             return *this;
         }
         BlurRegionFluentT &direction(BlurDirection d)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _dir = d;
             return *this;
         }
         BlurRegionFluentT &material(uint8_t strength, int32_t color)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _materialStrength = strength;
             detail::assignOptionalColor(_materialColor, color);
             return *this;
@@ -95,79 +90,68 @@ namespace pipgui
         ~GlowCircleFluentT() { draw(); }
         GlowCircleFluentT &pos(int16_t x, int16_t y)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
             return *this;
         }
         GlowCircleFluentT &radius(int16_t r)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _r = r;
             return *this;
         }
         GlowCircleFluentT &fillColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _fillColor = c;
             return *this;
         }
         GlowCircleFluentT &bgColor(int16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_bgColor, c);
             return *this;
         }
         GlowCircleFluentT &bgColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _bgColor = c;
             return *this;
         }
         GlowCircleFluentT &glowColor(int16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             detail::assignOptionalColor(_glowColor, c);
             return *this;
         }
         GlowCircleFluentT &glowColor(uint16_t c)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _glowColor = c;
             return *this;
         }
         GlowCircleFluentT &glowSize(uint8_t s)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _glowSize = s;
             return *this;
         }
         GlowCircleFluentT &glowStrength(uint8_t s)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _glowStrength = s;
             return *this;
         }
         GlowCircleFluentT &anim(GlowAnim a)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _anim = a;
             return *this;
         }
         GlowCircleFluentT &pulseMs(uint16_t ms)
         {
-            if (!canMutate())
-                return *this;
+            PIPGUI_FLUENT_GUARD();
             _pulsePeriodMs = ms;
             return *this;
         }

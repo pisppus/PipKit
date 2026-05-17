@@ -3,48 +3,66 @@
 
 namespace pipgui::net
 {
-    namespace
-    {
-        inline void configureOnce() noexcept
+        namespace
         {
-            static bool configured = false;
-            if (configured)
-                return;
-            pipcore::net::WifiConfig cfg;
-            cfg.ssid = PIPGUI_WIFI_SSID;
-            cfg.password = PIPGUI_WIFI_PASSWORD;
-            pipcore::net::wifiConfigure(cfg);
-            configured = true;
-        }
-    }
-
-    void wifiRequest(bool enabled) noexcept
-    {
-        if (enabled)
-            configureOnce();
-        pipcore::net::wifiRequest(enabled);
-    }
-
-    void wifiService() noexcept
-    {
+                inline void configureOnce() noexcept
+                {
 #if PIPGUI_WIFI
-        configureOnce();
+                        static bool configured = false;
+                        if (configured)
+                                return;
+                        pipcore::net::WifiConfig cfg;
+                        cfg.ssid = PIPGUI_WIFI_SSID;
+                        cfg.password = PIPGUI_WIFI_PASSWORD;
+                        pipcore::net::wifiConfigure(cfg);
+                        configured = true;
 #endif
-        pipcore::net::wifiService();
-    }
+                }
+        }
 
-    WifiState wifiState() noexcept
-    {
-        return pipcore::net::wifiState();
-    }
+        void wifiRequest(bool enabled) noexcept
+        {
+#if PIPGUI_WIFI
+                if (enabled)
+                        configureOnce();
+                pipcore::net::wifiRequest(enabled);
+#else
+                (void)enabled;
+#endif
+        }
 
-    bool wifiConnected() noexcept
-    {
-        return pipcore::net::wifiConnected();
-    }
+        void wifiService() noexcept
+        {
+#if PIPGUI_WIFI
+                configureOnce();
+                pipcore::net::wifiService();
+#endif
+        }
 
-    uint32_t wifiLocalIpV4() noexcept
-    {
-        return pipcore::net::wifiLocalIpV4();
-    }
+        WifiState wifiState() noexcept
+        {
+#if PIPGUI_WIFI
+                return pipcore::net::wifiState();
+#else
+                return WifiState::Off;
+#endif
+        }
+
+        bool wifiConnected() noexcept
+        {
+#if PIPGUI_WIFI
+                return pipcore::net::wifiConnected();
+#else
+                return false;
+#endif
+        }
+
+        uint32_t wifiLocalIpV4() noexcept
+        {
+#if PIPGUI_WIFI
+                return pipcore::net::wifiLocalIpV4();
+#else
+                return 0;
+#endif
+        }
 }

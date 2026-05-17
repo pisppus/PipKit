@@ -183,7 +183,7 @@ namespace pipgui
 
                 const int32_t a0 = (a00 << 16) + (a10 - a00) * (int32_t)fx;
                 const int32_t a1 = (a01 << 16) + (a11 - a01) * (int32_t)fx;
-                int32_t alpha = ((a0 + (int32_t)(((int64_t)(a1 - a0) * fy) >> 16)) + 0x8000) >> 16;
+                int32_t alpha = ((a0 + static_cast<int32_t>(((a1 - a0) * static_cast<int32_t>(fy)) >> 16)) + 0x8000) >> 16;
                 if (alpha < 0)
                     alpha = 0;
                 else if (alpha > 255)
@@ -235,13 +235,18 @@ namespace pipgui
     }
 
     void GUI::drawTextImmediateMasked(const String &text, int16_t rx, int16_t ry,
-                                      int16_t, int16_t,
+                                      int16_t tw, int16_t th,
                                       uint16_t fg565, uint16_t, TextAlign,
                                       int16_t fadeBoxX, int16_t fadeBoxW, uint8_t fadePx)
     {
         const FontData *font = fontDataForId(_typo.currentFontId);
         if (!_typo.psdfSizePx || !font)
             return;
+
+        const int16_t globalRx = rx;
+        const int16_t globalRy = ry;
+        if (tw > 0 && th > 0)
+            debugRecordLayoutRectGlobal(globalRx, globalRy, tw, th);
 
         rx = (int16_t)(rx - _render.originX);
         ry = (int16_t)(ry - _render.originY);
@@ -357,30 +362,55 @@ namespace pipgui
                                  const GlyphRowSampler rowSampler = sampler.row(atlasV);
                                  int32_t atlasU = atlasU0;
                                  uint16_t *dst = buf + (int32_t)py * stride + ix0;
+                                 int16_t runStart = -1;
                                  for (int px = ix0; px < ix1; ++px, ++dst, atlasU += atlasDu)
                                  {
                                      const uint8_t s8 = rowSampler.sample(atlasU);
                                      if (s8 <= s8Min)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
                                      const uint8_t alpha = alphaLut.values[s8];
                                      if (alpha)
+                                     {
                                          blendNative565(dst, fg, alpha);
+                                         if (runStart < 0)
+                                             runStart = (int16_t)px;
+                                     }
+                                     else if (runStart >= 0)
+                                     {
+                                         debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                         runStart = -1;
+                                     }
                                  }
+                                 if (runStart >= 0)
+                                     debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(ix1 - runStart));
                              }
                          }
-                        else
-                        {
-                            const int fadeLeftEnd = fadeBoxX + fadePxClamped;
-                            const int fadeRightStart = fadeBoxR - fadePxClamped;
-                            for (int py = iy0; py < iy1; ++py, atlasV += atlasDv)
-                            {
+                         else
+                         {
+                             const int fadeLeftEnd = fadeBoxX + fadePxClamped;
+                             const int fadeRightStart = fadeBoxR - fadePxClamped;
+                             for (int py = iy0; py < iy1; ++py, atlasV += atlasDv)
+                             {
                                  const GlyphRowSampler rowSampler = sampler.row(atlasV);
                                  int32_t atlasU = atlasU0;
                                  uint16_t *dst = buf + (int32_t)py * stride + ix0;
                                  int px = ix0;
+                                 int16_t runStart = -1;
 
                                  for (; px < ix1 && px < fadeBoxX; ++px, ++dst, atlasU += atlasDu)
                                  {
+                                     if (runStart >= 0)
+                                     {
+                                         debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                         runStart = -1;
+                                     }
                                  }
 
                                  const int leftLimit = std::min(ix1, fadeLeftEnd);
@@ -388,22 +418,52 @@ namespace pipgui
                                  {
                                      const uint8_t edgeAlpha = detail::fadeEdgeAlpha(px, fadeBoxX, fadeBoxR, fadePxClamped);
                                      if (edgeAlpha == 0)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
 
                                      const uint8_t s8 = rowSampler.sample(atlasU);
                                      if (s8 <= s8Min)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
 
                                      uint16_t alpha = alphaLut.values[s8];
                                      if (!alpha)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
                                      if (edgeAlpha < 255)
                                      {
                                          alpha = (uint16_t)((alpha * edgeAlpha + 127U) / 255U);
                                          if (!alpha)
+                                         {
+                                             if (runStart >= 0)
+                                             {
+                                                 debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                                 runStart = -1;
+                                             }
                                              continue;
+                                         }
                                      }
                                      blendNative565(dst, fg, (uint8_t)alpha);
+                                     if (runStart < 0)
+                                         runStart = (int16_t)px;
                                  }
 
                                  const int middleLimit = std::min(ix1, fadeRightStart);
@@ -411,11 +471,27 @@ namespace pipgui
                                  {
                                      const uint8_t s8 = rowSampler.sample(atlasU);
                                      if (s8 <= s8Min)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
 
                                      const uint8_t alpha = alphaLut.values[s8];
                                      if (alpha)
+                                     {
                                          blendNative565(dst, fg, alpha);
+                                         if (runStart < 0)
+                                             runStart = (int16_t)px;
+                                     }
+                                     else if (runStart >= 0)
+                                     {
+                                         debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                         runStart = -1;
+                                     }
                                  }
 
                                  const int rightLimit = std::min(ix1, fadeBoxR);
@@ -423,27 +499,64 @@ namespace pipgui
                                  {
                                      const uint8_t edgeAlpha = detail::fadeEdgeAlpha(px, fadeBoxX, fadeBoxR, fadePxClamped);
                                      if (edgeAlpha == 0)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
 
                                      const uint8_t s8 = rowSampler.sample(atlasU);
                                      if (s8 <= s8Min)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
 
                                      uint16_t alpha = alphaLut.values[s8];
                                      if (!alpha)
+                                     {
+                                         if (runStart >= 0)
+                                         {
+                                             debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                             runStart = -1;
+                                         }
                                          continue;
+                                     }
                                      if (edgeAlpha < 255)
                                      {
                                          alpha = (uint16_t)((alpha * edgeAlpha + 127U) / 255U);
                                          if (!alpha)
+                                         {
+                                             if (runStart >= 0)
+                                             {
+                                                 debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                                 runStart = -1;
+                                             }
                                              continue;
+                                         }
                                      }
                                      blendNative565(dst, fg, (uint8_t)alpha);
+                                     if (runStart < 0)
+                                         runStart = (int16_t)px;
                                  }
 
                                  for (; px < ix1; ++px, ++dst, atlasU += atlasDu)
                                  {
+                                     if (runStart >= 0)
+                                     {
+                                         debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(px - runStart));
+                                         runStart = -1;
+                                     }
                                  }
+                                 if (runStart >= 0)
+                                     debugRecordPaintSpanLocal(runStart, (int16_t)py, (int16_t)(ix1 - runStart));
                              }
                          }
                          return true;
@@ -457,19 +570,15 @@ namespace pipgui
         if (!_typo.psdfSizePx || !font)
             return;
         TextLayoutBox box;
-        if (!computeTextLayoutBox(text.c_str(), (int)text.length(), font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
+        if (!resolveTextLayoutBoxCached(text, font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
             box.width <= 0 || box.height <= 0)
             return;
         const int16_t tw = box.width;
         const int16_t th = box.height;
 
         int16_t rx = (x == -1) ? AutoX((int32_t)tw) : x;
-        if (align == TextAlign::Center)
-            rx -= (tw + 1) / 2;
-        else if (align == TextAlign::Right)
-            rx -= tw;
-
-        const int16_t ry = (y == -1) ? AutoY((int32_t)th) : y;
+        int16_t ry = (y == -1) ? AutoY((int32_t)th) : y;
+        resolveTextAlignedOrigin(rx, ry, tw, th, align, rx, ry);
         drawTextImmediate(text,
                           (int16_t)(rx + box.originX),
                           (int16_t)(ry + box.originY),
@@ -534,7 +643,7 @@ namespace pipgui
         }
 
         TextLayoutBox box;
-        if (!computeTextLayoutBox(text.c_str(), (int)text.length(), font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
+        if (!resolveTextLayoutBoxCached(text, font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
             box.width <= 0 || box.height <= 0)
         {
             if (cacheEntry.rect.w > 0 && cacheEntry.rect.h > 0)
@@ -569,11 +678,8 @@ namespace pipgui
         const int16_t th = box.height;
 
         int16_t rx = (x == -1) ? AutoX((int32_t)tw) : x;
-        if (align == TextAlign::Center)
-            rx -= (tw + 1) / 2;
-        else if (align == TextAlign::Right)
-            rx -= tw;
-        const int16_t ry = (y == -1) ? AutoY((int32_t)th) : y;
+        int16_t ry = (y == -1) ? AutoY((int32_t)th) : y;
+        resolveTextAlignedOrigin(rx, ry, tw, th, align, rx, ry);
 
         const float drawXf = (float)(rx + box.originX) + _typo.subpixelOffsetX;
         const float drawYf = (float)(ry + box.originY) + _typo.subpixelOffsetY;
@@ -591,6 +697,7 @@ namespace pipgui
         int16_t clearY = newY;
         int16_t clearW = newW;
         int16_t clearH = newH;
+        
         if (cacheEntry.rect.w > 0 && cacheEntry.rect.h > 0)
         {
             const int16_t minX = std::min(clearX, cacheEntry.rect.x);
@@ -611,8 +718,7 @@ namespace pipgui
                                           drawTextImmediate(text,
                                                             (int16_t)(rx + box.originX),
                                                             (int16_t)(ry + box.originY),
-                                                            tw, th, fg565, bg565, align);
-                                      });
+                                                            tw, th, fg565, bg565, align); });
             cacheEntry.rect = {newX, newY, newW, newH};
             return;
         }

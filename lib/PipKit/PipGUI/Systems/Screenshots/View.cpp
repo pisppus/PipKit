@@ -1,7 +1,10 @@
 #include <PipGUI/Core/GUI.hpp>
-#include <PipGUI/Graphics/Utils/Colors.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
+
+#include <PipGUI/Graphics/Utils/Colors.hpp>
+
 #include <algorithm>
+
 #include <cstdio>
 #include <cstring>
 

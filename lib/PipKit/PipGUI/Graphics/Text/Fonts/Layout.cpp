@@ -8,11 +8,9 @@ namespace pipgui
         const FontData *font = fontDataForId(_typo.currentFontId);
         if (!_typo.psdfSizePx || !font)
             return false;
-        if (text.length() == 0)
-            return true;
 
         TextLayoutBox box;
-        if (!computeTextLayoutBox(text.c_str(), (int)text.length(), font, _typo.psdfSizePx, _typo.psdfWeight, box))
+        if (!resolveTextLayoutBoxCached(text, font, _typo.psdfSizePx, _typo.psdfWeight, box))
             return false;
         outW = box.width;
         outH = box.height;
@@ -30,7 +28,7 @@ namespace pipgui
         if (!_typo.psdfSizePx || !font)
             return false;
         TextLayoutBox box;
-        if (!computeTextLayoutBox(text.c_str(), (int)text.length(), font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
+        if (!resolveTextLayoutBoxCached(text, font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
             box.width <= 0 || box.height <= 0)
             return false;
         const int16_t tw = box.width;
@@ -41,7 +39,6 @@ namespace pipgui
             boxX -= maxWidth / 2;
         else if (align == TextAlign::Right)
             boxX -= maxWidth;
-
         const int16_t boxY = (y == -1) ? AutoY((int32_t)th) : y;
         if (tw <= maxWidth)
             return false;
@@ -126,39 +123,60 @@ namespace pipgui
         if (maxWidth <= 0)
             return false;
 
-        int16_t tw = 0, th = 0;
-        if (!measureText(text, tw, th) || tw <= 0 || th <= 0)
-            return false;
-        if (tw <= maxWidth)
+        const FontData *font = fontDataForId(_typo.currentFontId);
+        if (!_typo.psdfSizePx || !font)
             return false;
 
-        int16_t dotsW = 0, dotsH = 0;
+        const char *buf = text.c_str();
+        const size_t textLen = text.length();
+        TextLayoutBox box;
+        if (!resolveTextLayoutBoxCached(text, font, _typo.psdfSizePx, _typo.psdfWeight, box) ||
+            box.width <= 0 || box.height <= 0)
+            return false;
+        if (box.width <= maxWidth)
+            return false;
+
         const String dots("...");
-        if (!measureText(dots, dotsW, dotsH))
+        TextLayoutBox dotsBox;
+        if (!resolveTextLayoutBoxCached(dots, font, _typo.psdfSizePx, _typo.psdfWeight, dotsBox))
             return false;
 
         String clipped;
-        if (dotsW >= maxWidth)
+        if (dotsBox.width >= maxWidth)
         {
             clipped = dots;
         }
         else
         {
-            String candidate = text;
-            int16_t width = 0, height = 0;
-            while (candidate.length() > 0)
+            size_t bestCut = 0;
+            size_t lo = 0;
+            size_t hi = textLen;
+
+            while (lo <= hi)
             {
-                const size_t cut = prevUtf8Boundary(candidate, candidate.length());
-                candidate.remove(cut);
-                String trial = candidate + dots;
-                if (measureText(trial, width, height) && width <= maxWidth)
+                const size_t mid = lo + ((hi - lo) >> 1);
+                const size_t cut = utf8BoundaryFloor(buf, textLen, mid);
+                String trial = text.substring(0, cut) + dots;
+                TextLayoutBox trialBox;
+                const bool fits = computeTextLayoutBox(trial.c_str(), (int)trial.length(), font, _typo.psdfSizePx, _typo.psdfWeight, trialBox) &&
+                                  trialBox.width <= maxWidth;
+
+                if (fits)
                 {
-                    clipped = trial;
-                    break;
+                    bestCut = cut;
+                    if (cut >= textLen)
+                        break;
+                    lo = cut + 1;
+                }
+                else
+                {
+                    if (cut == 0)
+                        break;
+                    hi = cut - 1;
                 }
             }
-            if (clipped.length() == 0)
-                clipped = dots;
+
+            clipped = (bestCut > 0) ? (text.substring(0, bestCut) + dots) : dots;
         }
 
         if (clipped.length() == 0)

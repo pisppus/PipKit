@@ -78,7 +78,7 @@ namespace pipgui
         {
             char tmpPath[64];
             if (screenshots::detail::tmpPathFromFinal(tmpPath, sizeof(tmpPath), _shotStream.path))
-                LittleFS.remove(tmpPath);
+                (void)pipcore::storage::remove(tmpPath);
         }
         _shotStream.path[0] = '\0';
 #endif

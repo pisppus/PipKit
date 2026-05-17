@@ -1,19 +1,19 @@
 #pragma once
 
-#include <PipCore/Display.hpp>
-#include <PipCore/Graphics/Sprite.hpp>
-#include <PipGUI/Core/Types.hpp>
-#include <PipGUI/Core/Debug.hpp>
-#include <PipGUI/Core/Internal/GuiState.hpp>
-#include <PipGUI/Graphics/Utils/Colors.hpp>
-#include <PipGUI/Systems/Network/Wifi.hpp>
-#include <PipGUI/Systems/Update/Ota.hpp>
 #include <algorithm>
 
-#if (PIPGUI_SCREENSHOT_MODE == 2)
-#include <FS.h>
-#include <LittleFS.h>
-#endif
+#include <PipCore/Display.hpp>
+#include <PipCore/Graphics/Sprite.hpp>
+#include <PipCore/Storage/FileSystem.hpp>
+
+#include <PipGUI/Core/Debug/Debug.hpp>
+#include <PipGUI/Core/Types.hpp>
+#include <PipGUI/Core/Internal/GuiState.hpp>
+
+#include <PipGUI/Graphics/Utils/Colors.hpp>
+
+#include <PipGUI/Systems/Network/Wifi.hpp>
+#include <PipGUI/Systems/Update/Ota.hpp>
 
 namespace pipgui
 {
@@ -181,20 +181,22 @@ namespace pipgui
         [[nodiscard]] DrawScreenshotFluent drawScreenshot();
         InputState pollInput(Button &next, Button &prev);
         InputState pollInput(Button &next, Button &prev, Button &select);
-        void consumeAutoNav() noexcept { _navConsumed = true; _manualInputMask |= ManualInput_Nav; }
+        void consumeAutoNav() noexcept
+        {
+            _navConsumed = true;
+            _manualInputMask |= ManualInput_Nav;
+        }
         void setAdaptivePreview(uint16_t minWidth, uint16_t minHeight, uint32_t cycleMs = 3600);
         void clearAdaptivePreview() noexcept;
         void setRotation(uint8_t rotation, uint32_t durationMs = 520);
         [[nodiscard]] uint8_t screenRotation() const noexcept { return _disp.rotation; }
         [[nodiscard]] bool rotationTransitionActive() const noexcept;
 
-        // WiFi
         void requestWiFi(bool enabled) noexcept;
         [[nodiscard]] net::WifiState wifiState() const noexcept;
         [[nodiscard]] bool wifiConnected() const noexcept;
         [[nodiscard]] uint32_t wifiLocalIpV4() const noexcept;
 
-        // OTA (signed manifest, non-blocking state machine)
         void otaConfigure(OtaStatusCallback cb = nullptr,
                           void *user = nullptr) noexcept;
 
@@ -311,7 +313,6 @@ namespace pipgui
         void prevScreen();
         void backScreen();
 
-        // Graph pause (3-button mode: toggled by Select on graph screens; see API.md)
         [[nodiscard]] bool graphPaused() const noexcept;
         void setGraphPaused(bool paused) noexcept;
         [[nodiscard]] bool GraphPauseToggled() noexcept;
@@ -467,8 +468,6 @@ namespace pipgui
             if (!buf || sw <= 0 || sh <= 0 || tileH <= 0 || stride <= 0)
                 return;
 
-            const bool debugDirty = Debug::dirtyRectEnabled();
-            const uint16_t debugCol = debugDirty ? pipcore::Sprite::swap16(Debug::dirtyRectActiveColor()) : 0;
             const bool prevRender = _flags.inSpritePass;
             pipcore::Sprite *const prevActive = _render.activeSprite;
             const ClipState prevClip = _clip;
@@ -511,31 +510,7 @@ namespace pipgui
 
                 const int16_t ww = (int16_t)(rectX2 - rectX1);
                 const int16_t srcY = (int16_t)(y1 - tileY);
-                if (debugDirty && ww > 1 && hh > 1)
-                {
-                    const int16_t localX0 = rectX1;
-                    const int16_t localY0 = srcY;
-                    const int16_t localX1 = (int16_t)(rectX1 + ww - 1);
-                    const int16_t localY1 = (int16_t)(srcY + hh - 1);
-
-                    const bool drawTop = (y1 == rectY1);
-                    const bool drawBottom = (y2 == rectY2);
-                    if (drawTop)
-                    {
-                        for (int16_t px = localX0; px <= localX1; ++px)
-                            buf[(int32_t)localY0 * stride + px] = debugCol;
-                    }
-                    if (drawBottom)
-                    {
-                        for (int16_t px = localX0; px <= localX1; ++px)
-                            buf[(int32_t)localY1 * stride + px] = debugCol;
-                    }
-                    for (int16_t py = localY0; py <= localY1; ++py)
-                    {
-                        buf[(int32_t)py * stride + localX0] = debugCol;
-                        buf[(int32_t)py * stride + localX1] = debugCol;
-                    }
-                }
+                Debug::drawOverlay(buf, stride, rectX1, y1, ww, hh, tileY);
 
                 _disp.display->writeRect565(rectX1, y1, ww, hh, buf + (size_t)srcY * stride + rectX1, stride);
                 reportPlatformErrorOnce(stage);
@@ -551,15 +526,15 @@ namespace pipgui
 
         pipcore::Sprite *getDrawTarget();
         detail::ButtonState &resolveButtonState(const String &label, int16_t x, int16_t y,
-                                               int16_t w, int16_t h, uint16_t baseColor, uint8_t radius,
-                                               IconId iconId);
+                                                int16_t w, int16_t h, uint16_t baseColor, uint8_t radius,
+                                                IconId iconId);
         detail::SliderState &resolveSliderState(int16_t x, int16_t y, int16_t w, int16_t h,
                                                 int16_t minValue, int16_t maxValue, int16_t step,
                                                 uint16_t activeColor, int32_t inactiveColor, int32_t thumbColor);
         void stepButtonState(detail::ButtonState &s, bool isDown);
         bool stepSliderState(detail::SliderState &state, int16_t &value, bool nextDown, bool prevDown);
         detail::ToggleState &resolveToggleState(int16_t x, int16_t y, int16_t w, int16_t h,
-                                               uint16_t activeColor, int32_t inactiveColor, int32_t knobColor);
+                                                uint16_t activeColor, int32_t inactiveColor, int32_t knobColor);
         detail::DrumRollAnimState &resolveDrumRollState(uint32_t key, uint8_t selectedIndex, uint16_t durationMs);
         void drawDrumRollHorizontal(int16_t x, int16_t y, int16_t w, int16_t h,
                                     const String *options, uint8_t count, uint8_t selectedIndex,
@@ -579,6 +554,12 @@ namespace pipgui
                                       uint16_t baseColor, uint16_t fillColor,
                                       const String &text, uint16_t textColor565,
                                       TextAlign align, uint16_t fontPx);
+        void debugRecordPaintRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept;
+        void debugRecordPaintRectLocal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept;
+        void debugRecordPaintSpanLocal(int16_t x, int16_t y, int16_t w) noexcept;
+        void debugRecordPaintPixelLocal(int16_t x, int16_t y) noexcept;
+        void debugRecordLayoutRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept;
+        void debugRecordSpacingRectGlobal(int16_t x, int16_t y, int16_t w, int16_t h) noexcept;
         void drawProgressDecorated(int16_t x, int16_t y, int16_t w, int16_t h,
                                    uint8_t value, uint16_t baseColor, uint16_t fillColor, uint8_t radius,
                                    ProgressAnim anim,

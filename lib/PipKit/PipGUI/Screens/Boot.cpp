@@ -125,7 +125,6 @@ namespace pipgui
 
             _flags.inSpritePass = prevSpritePass;
             _render.activeSprite = prevActive;
-
         };
 
         switch (_boot.anim)

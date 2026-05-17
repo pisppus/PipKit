@@ -1,8 +1,9 @@
+#include <cmath>
+#include <cstring>
+
+#include <PipGUI/Core/Debug/Debug.hpp>
 #include <PipGUI/Core/GUI.hpp>
 #include <PipGUI/Core/Internal/ViewModels.hpp>
-#include <PipGUI/Core/Debug.hpp>
-#include <cstring>
-#include <math.h>
 
 namespace pipgui
 {
@@ -158,7 +159,11 @@ namespace pipgui
             _screen.current = screenId;
 
             applyClip(clipX, clipY, clipW, clipH);
+            setBackgroundColorCache(0x0000);
+            const bool prevPaintCaptureSuspended = Debug::paintCaptureSuspended();
+            Debug::setPaintCaptureSuspended(true);
             clear(resolveBgColor565(_render.bgColor, _render.bgColor565));
+            Debug::setPaintCaptureSuspended(prevPaintCaptureSuspended);
 
             ListState *list = getList(screenId);
             if (list && list->configured && list->itemCount > 0)

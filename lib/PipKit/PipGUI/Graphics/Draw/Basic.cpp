@@ -1,4 +1,5 @@
 #include "Internal.hpp"
+
 #include <cstdlib>
 
 namespace pipgui
@@ -10,6 +11,9 @@ namespace pipgui
         constexpr int kArcSubSamples = 2;
         constexpr int kArcSubSampleCount = kArcSubSamples * kArcSubSamples;
         constexpr float kArcCrossEpsilon = 0.0001f;
+        constexpr float kArcFullSweepDeg = 359.0f;
+        constexpr float kArcExplicitFullSweepDeg = 359.0f;
+        constexpr float kArcCoincidentSweepDeg = 0.01f;
 
         struct ArcSweepInfo
         {
@@ -22,6 +26,11 @@ namespace pipgui
             float endDirY;
             bool full;
             bool wide;
+        };
+
+        struct NoopPixelRecorder
+        {
+            void operator()(int16_t, int16_t) const noexcept {}
         };
 
         static inline float normalizeArcDeg(float deg) noexcept
@@ -43,16 +52,30 @@ namespace pipgui
             return deg >= startDeg || deg <= endDeg;
         }
 
+        static inline float arcSweepDeg(float startDeg, float endDeg) noexcept
+        {
+            float sweep = normalizeArcDeg(endDeg) - normalizeArcDeg(startDeg);
+            if (sweep < 0.0f)
+                sweep += 360.0f;
+            return sweep;
+        }
+
+        static inline bool isFullArcSweep(float startDeg, float endDeg) noexcept
+        {
+            const float sweep = arcSweepDeg(startDeg, endDeg);
+            if (sweep >= kArcFullSweepDeg)
+                return true;
+            return sweep <= kArcCoincidentSweepDeg && fabsf(endDeg - startDeg) >= kArcExplicitFullSweepDeg;
+        }
+
         static inline ArcSweepInfo makeArcSweepInfo(bool fullRing, float startDeg, float endDeg) noexcept
         {
             ArcSweepInfo info{};
             info.startDeg = normalizeArcDeg(startDeg);
             info.endDeg = normalizeArcDeg(endDeg);
-            float sweep = info.endDeg - info.startDeg;
-            if (sweep < 0.0f)
-                sweep += 360.0f;
+            const float sweep = arcSweepDeg(info.startDeg, info.endDeg);
             info.sweepDeg = sweep;
-            info.full = fullRing || sweep >= 359.5f;
+            info.full = fullRing || sweep >= kArcFullSweepDeg;
             info.wide = sweep > 180.0f;
 
             const float startRad = info.startDeg * kArcDegToRad;
@@ -79,7 +102,7 @@ namespace pipgui
             return crossStart <= kArcCrossEpsilon || crossEnd <= kArcCrossEpsilon;
         }
 
-        template <typename ColorFunc>
+        template <typename ColorFunc, typename RecordFn>
         static void rasterThickArcAA(pipcore::Sprite *spr,
                                      int16_t cx, int16_t cy,
                                      int16_t r,
@@ -88,7 +111,8 @@ namespace pipgui
                                      float startDeg,
                                      float endDeg,
                                      ColorFunc colorAtAngle,
-                                     bool needsColorAngle)
+                                     bool needsColorAngle,
+                                     RecordFn recordPixel)
         {
             if (!spr || r <= 0 || thickness < 1)
                 return;
@@ -159,14 +183,19 @@ namespace pipgui
                         *dst = c.fg;
                     else
                         blendStore(dst, c, gamma[(covered * 255) / kArcSubSampleCount]);
+                    recordPixel(static_cast<int16_t>(px), static_cast<int16_t>(py));
                 }
             }
         }
 
+        template <typename RecordFn>
         static void rasterArcCapAA(pipcore::Sprite *spr,
                                    float cx, float cy,
+                                   int16_t arcCx, int16_t arcCy,
                                    float radius,
-                                   uint16_t color)
+                                   uint16_t color,
+                                   const ArcSweepInfo *sweepInfo,
+                                   RecordFn recordPixel)
         {
             if (!spr || radius <= 0.0f)
                 return;
@@ -206,8 +235,13 @@ namespace pipgui
                         for (int sx = 0; sx < kArcSubSamples; ++sx)
                         {
                             const float dx = (static_cast<float>(px) - cx - 0.5f) + subBias + static_cast<float>(sx) * subStep;
-                            if (dx * dx + dy * dy <= radius2)
-                                ++covered;
+                            if (dx * dx + dy * dy > radius2)
+                                continue;
+                            if (sweepInfo && pointInArcSweep(*sweepInfo,
+                                                             (static_cast<float>(px - arcCx) - 0.5f) + subBias + static_cast<float>(sx) * subStep,
+                                                             (static_cast<float>(py - arcCy) - 0.5f) + subBias + static_cast<float>(sy) * subStep))
+                                continue;
+                            ++covered;
                         }
                     }
 
@@ -219,20 +253,24 @@ namespace pipgui
                         *dst = c.fg;
                     else
                         blendStore(dst, c, gamma[(covered * 255) / kArcSubSampleCount]);
+                    recordPixel(static_cast<int16_t>(px), static_cast<int16_t>(py));
                 }
             }
         }
 
-        template <typename ColorFunc>
+        template <typename ColorFunc, typename RecordFn>
         static void drawThickArcCaps(pipcore::Sprite *spr,
                                      int16_t cx, int16_t cy,
                                      int16_t r,
                                      uint8_t thickness,
                                      float startDeg,
                                      float endDeg,
-                                     ColorFunc colorAtAngle)
+                                     ColorFunc colorAtAngle,
+                                     RecordFn recordPixel)
         {
             if (!spr || r <= 0 || thickness < 1)
+                return;
+            if (thickness >= r)
                 return;
 
             const float capRadius = static_cast<float>(thickness) * 0.5f;
@@ -240,16 +278,18 @@ namespace pipgui
             if (centerRadius < capRadius)
                 centerRadius = capRadius;
 
+            const ArcSweepInfo sweepInfo = makeArcSweepInfo(false, startDeg, endDeg);
+
             auto drawCap = [&](float deg)
             {
                 const float rad = (deg - 90.0f) * kArcDegToRad;
                 const float px = static_cast<float>(cx) + cosf(rad) * centerRadius;
                 const float py = static_cast<float>(cy) + sinf(rad) * centerRadius;
-                rasterArcCapAA(spr, px, py, capRadius, colorAtAngle(normalizeArcDeg(deg)));
+                rasterArcCapAA(spr, px, py, cx, cy, capRadius, colorAtAngle(normalizeArcDeg(deg)), &sweepInfo, recordPixel);
             };
 
             drawCap(startDeg);
-            if (fabsf(endDeg - startDeg) > 0.01f)
+            if (arcSweepDeg(startDeg, endDeg) > kArcCoincidentSweepDeg)
                 drawCap(endDeg);
         }
 
@@ -299,7 +339,7 @@ namespace pipgui
             const float len2 = vx * vx + vy * vy;
             if (len2 <= 0.0f)
             {
-                rasterArcCapAA(spr, static_cast<float>(x0), static_cast<float>(y0), radius, color565);
+                rasterArcCapAA(spr, static_cast<float>(x0), static_cast<float>(y0), x0, y0, radius, color565, nullptr, NoopPixelRecorder{});
                 return;
             }
             const float invLen2 = 1.0f / len2;
@@ -370,7 +410,8 @@ namespace pipgui
             {
                 if (!masks[r])
                 {
-                    masks[r] = static_cast<uint8_t *>(malloc(11 * 11));
+                    pipcore::Platform *plat = pipcore::GetPlatform();
+                    masks[r] = plat ? static_cast<uint8_t *>(plat->alloc(11 * 11, pipcore::AllocCaps::Default)) : nullptr;
                     if (!masks[r])
                     {
                         outSize = 0;
@@ -575,6 +616,8 @@ namespace pipgui
         if (invalidate && _disp.display && _flags.spriteEnabled && !_flags.inSpritePass)
             invalidateRect(std::min(origX0, origX1), std::min(origY0, origY1),
                            std::abs(origX1 - origX0) + 1, std::abs(origY1 - origY0) + 1);
+        debugRecordPaintRectGlobal(std::min(origX0, origX1), std::min(origY0, origY1),
+                                   std::abs(origX1 - origX0) + 1, std::abs(origY1 - origY0) + 1);
     }
 
     void GUI::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color)
@@ -625,9 +668,10 @@ namespace pipgui
         const int16_t drawH = (int16_t)(y1 - y0);
 
         spr->fillRect(drawX, drawY, drawW, drawH, color);
+        debugRecordPaintRectLocal(drawX, drawY, drawW, drawH);
 
         if (_disp.display && _flags.spriteEnabled && !_flags.inSpritePass)
-            invalidateRect(drawX, drawY, drawW, drawH);
+            invalidateRect((int16_t)(drawX + _render.originX), (int16_t)(drawY + _render.originY), drawW, drawH);
     }
 
     void GUI::fillCircle(int16_t cx, int16_t cy, int16_t r, uint16_t color565)
@@ -645,6 +689,18 @@ namespace pipgui
         const Color565 c = makeColor565(color565);
         const bool noClip = (cx - r >= s.clipX && cx + r <= s.clipR && cy - r >= s.clipY && cy + r <= s.clipB);
         const uint8_t *gamma = gammaTable();
+        const auto recordSpanLocal = [&](int16_t py, int16_t x0, int16_t x1) noexcept
+        {
+            const int16_t spanX0 = std::max<int16_t>(x0, s.clipX);
+            const int16_t spanX1 = std::min<int16_t>(x1, s.clipR);
+            if (spanX1 >= spanX0)
+                debugRecordPaintSpanLocal(spanX0, py, (int16_t)(spanX1 - spanX0 + 1));
+        };
+        const auto recordPixelLocal = [&](int16_t px, int16_t py) noexcept
+        {
+            if (px >= s.clipX && px <= s.clipR && py >= s.clipY && py <= s.clipB)
+                debugRecordPaintPixelLocal(px, py);
+        };
 
         if (r <= 5)
         {
@@ -672,10 +728,11 @@ namespace pipgui
                             row[x] = c.fg;
                         else
                             blendStore(row + x, c, gamma[alpha]);
+                        recordPixelLocal(x, y);
                     }
                 }
                 if (_disp.display && _flags.spriteEnabled && !_flags.inSpritePass)
-                    invalidateRect((int16_t)(cx - r), (int16_t)(cy - r),
+                    invalidateRect((int16_t)(cx - r + _render.originX), (int16_t)(cy - r + _render.originY),
                                    (int16_t)(r * 2 + 1), (int16_t)(r * 2 + 1));
                 return;
             }
@@ -685,18 +742,27 @@ namespace pipgui
             fillSpanFast(s, cy, cx - r, cx + r, c);
         else
             fillSpanClip(s, cy, cx - r, cx + r, c);
+        recordSpanLocal(cy, (int16_t)(cx - r), (int16_t)(cx + r));
 
         if (noClip)
             rasterAAFillRoundCore(cx, cy, r, 0, 0, [&](int16_t px, int16_t py, uint8_t alpha)
-                                  { blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha); }, [&](int16_t py, int16_t x0, int16_t x1)
-                                  { fillSpanFast(s, py, x0, x1, c); });
+                                  {
+                                      blendStore(s.buf + (int32_t)py * s.stride + px, c, alpha);
+                                      recordPixelLocal(px, py); }, [&](int16_t py, int16_t x0, int16_t x1)
+                                  {
+                                      fillSpanFast(s, py, x0, x1, c);
+                                      recordSpanLocal(py, x0, x1); });
         else
             rasterAAFillRoundCore(cx, cy, r, 0, 0, [&](int16_t px, int16_t py, uint8_t alpha)
-                                  { plotBlendClip(s, c, px, py, alpha); }, [&](int16_t py, int16_t x0, int16_t x1)
-                                  { fillSpanClip(s, py, x0, x1, c); });
+                                  {
+                                      plotBlendClip(s, c, px, py, alpha);
+                                      recordPixelLocal(px, py); }, [&](int16_t py, int16_t x0, int16_t x1)
+                                  {
+                                      fillSpanClip(s, py, x0, x1, c);
+                                      recordSpanLocal(py, x0, x1); });
 
         if (_disp.display && _flags.spriteEnabled && !_flags.inSpritePass)
-            invalidateRect((int16_t)(cx - r), (int16_t)(cy - r),
+            invalidateRect((int16_t)(cx - r + _render.originX), (int16_t)(cy - r + _render.originY),
                            (int16_t)(r * 2 + 1), (int16_t)(r * 2 + 1));
     }
 
@@ -736,6 +802,7 @@ namespace pipgui
                             row[x] = c.fg;
                         else
                             blendStore(row + x, c, gamma[alpha]);
+                        debugRecordPaintPixelLocal(x, y);
                     }
                 }
                 if (_disp.display && _flags.spriteEnabled && !_flags.inSpritePass)
@@ -886,7 +953,8 @@ namespace pipgui
         }
 
         if (_disp.display && !_flags.inSpritePass)
-            invalidateRect(x, y, w, h);
+            invalidateRect((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w, h);
+        debugRecordPaintRectLocal(x, y, w, h);
     }
 
     void GUI::fillRoundRect(int16_t x, int16_t y, int16_t w, int16_t h,
@@ -1049,7 +1117,8 @@ namespace pipgui
         }
 
         if (_disp.display && !_flags.inSpritePass)
-            invalidateRect(x, y, w, h);
+            invalidateRect((int16_t)(x + _render.originX), (int16_t)(y + _render.originY), w, h);
+        debugRecordPaintRectLocal(x, y, w, h);
     }
 
     void GUI::drawRoundRect(int16_t x, int16_t y, int16_t w, int16_t h,
@@ -1079,27 +1148,29 @@ namespace pipgui
         cx = (int16_t)(cx - _render.originX);
         cy = (int16_t)(cy - _render.originY);
 
-        const float rawSweep = fabsf(endDeg - startDeg);
-        const bool fullSweep = rawSweep >= 359.5f;
+        const bool fullSweep = isFullArcSweep(startDeg, endDeg);
         if (thickness < 1)
             thickness = 1;
 
         auto spr = getDrawTarget();
         if (!spr)
             return;
+        const auto recordPixelLocal = [&](int16_t px, int16_t py) noexcept
+        {
+            debugRecordPaintPixelLocal(px, py);
+        };
         if (fullSweep)
             rasterThickArcAA(spr, cx, cy, r, thickness, true, 0.0f, 360.0f, [&](float deg) -> uint16_t
-                             { return shader(shaderCtx, deg); }, needsColorAngle);
+                             { return shader(shaderCtx, deg); }, needsColorAngle, recordPixelLocal);
         else
         {
             rasterThickArcAA(spr, cx, cy, r, thickness, false, startDeg, endDeg, [&](float deg) -> uint16_t
-                             { return shader(shaderCtx, deg); }, needsColorAngle);
-            drawThickArcCaps(spr, cx, cy, r, thickness, startDeg, endDeg,
-                             [&](float deg) -> uint16_t
-                             { return shader(shaderCtx, deg); });
+                             { return shader(shaderCtx, deg); }, needsColorAngle, recordPixelLocal);
+            drawThickArcCaps(spr, cx, cy, r, thickness, startDeg, endDeg, [&](float deg) -> uint16_t
+                             { return shader(shaderCtx, deg); }, recordPixelLocal);
         }
 
         if (invalidate && _disp.display && !_flags.inSpritePass)
-            invalidateRect(cx - r - 1, cy - r - 1, r * 2 + 3, r * 2 + 3);
+            invalidateRect((int16_t)(cx - r - 1 + _render.originX), (int16_t)(cy - r - 1 + _render.originY), r * 2 + 3, r * 2 + 3);
     }
 }

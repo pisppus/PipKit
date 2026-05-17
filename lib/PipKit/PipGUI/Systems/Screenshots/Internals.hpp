@@ -1,13 +1,16 @@
 #pragma once
 
 #include <PipGUI/Core/GUI.hpp>
+#include <PipCore/Storage/FileSystem.hpp>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <type_traits>
 
 namespace pipgui::screenshots::detail
 {
@@ -90,7 +93,7 @@ namespace pipgui::screenshots::detail
             crc32UpdateByte(crc, data[i]);
     }
 
-    [[nodiscard]] inline bool writeTrailer(fs::File &f, uint32_t payloadSize, uint32_t payloadCrc32, uint8_t flags = 0) noexcept
+    [[nodiscard]] inline bool writeTrailer(pipcore::storage::File &f, uint32_t payloadSize, uint32_t payloadCrc32, uint8_t flags = 0) noexcept
     {
         uint8_t t[kTrlSize] = {};
         t[0] = kTrlMagic[0];
@@ -106,7 +109,7 @@ namespace pipgui::screenshots::detail
         return f.write(t, sizeof(t)) == sizeof(t);
     }
 
-    [[nodiscard]] inline bool readTrailer(fs::File &f,
+    [[nodiscard]] inline bool readTrailer(pipcore::storage::File &f,
                                           uint32_t headerSize,
                                           uint32_t payloadSize,
                                           uint32_t &outCrc32,
@@ -196,7 +199,7 @@ namespace pipgui::screenshots::detail
     {
         if (ok)
             return;
-        fs::File d = LittleFS.open(path);
+        pipcore::storage::File d = pipcore::storage::open(path);
         if (d)
         {
             ok = d.isDirectory();
@@ -204,8 +207,8 @@ namespace pipgui::screenshots::detail
             if (ok)
                 return;
         }
-        LittleFS.mkdir(path);
-        d = LittleFS.open(path);
+        (void)pipcore::storage::mkdir(path);
+        d = pipcore::storage::open(path);
         ok = d && d.isDirectory();
         if (d)
             d.close();
@@ -281,7 +284,7 @@ namespace pipgui::screenshots::detail
 
     struct PayloadReader
     {
-        fs::File *f = nullptr;
+        pipcore::storage::File *f = nullptr;
         uint8_t buf[256] = {};
         uint16_t off = 0;
         uint16_t len = 0;

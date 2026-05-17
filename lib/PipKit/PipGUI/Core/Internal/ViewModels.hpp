@@ -18,11 +18,13 @@ namespace pipgui
         uint16_t *innerCache = nullptr;
         int16_t innerCacheW = 0;
         int16_t innerCacheH = 0;
+        bool innerCacheDisabled = false;
         uint16_t *renderCache = nullptr;
         int16_t renderCacheW = 0;
         int16_t renderCacheH = 0;
         bool renderCacheValid = false;
         uint8_t renderCacheTileMask = 0;
+        bool renderCacheDisabled = false;
 
         uint32_t bgColor = 0;
         uint16_t bgColor565 = 0;

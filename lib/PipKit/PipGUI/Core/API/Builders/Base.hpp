@@ -6,9 +6,17 @@
 #include <new>
 #include <optional>
 #include <utility>
+
 #include <PipCore/Platform.hpp>
 #include <PipCore/Platforms/Select.hpp>
+
 #include <PipGUI/Core/Types.hpp>
+
+#ifndef PIPGUI_FLUENT_GUARD
+#define PIPGUI_FLUENT_GUARD() \
+    if (!canMutate())         \
+        return *this;
+#endif
 
 namespace pipgui
 {
@@ -289,4 +297,3 @@ namespace pipgui
         };
     }
 }
-
