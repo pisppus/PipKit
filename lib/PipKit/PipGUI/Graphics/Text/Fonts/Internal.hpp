@@ -677,12 +677,12 @@ namespace pipgui
                                                 TextAlign align,
                                                 int16_t &outX, int16_t &outY)
     {
+        (void)height;
         outX = x;
         if (align == TextAlign::Center)
             outX -= (width + 1) / 2;
         else if (align == TextAlign::Right)
             outX -= width;
         outY = y;
-        (void)height;
     }
 }

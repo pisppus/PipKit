@@ -1,15 +1,12 @@
 #include "Internal.hpp"
+#include <PipGUI/Graphics/Draw/Internal.hpp>
+
+#include <math.h>
 
 namespace pipgui
 {
     namespace
     {
-        struct GlowLayer
-        {
-            int16_t offset;
-            uint16_t color;
-        };
-
         static inline uint16_t computeGlowStrength(uint8_t glowStrength, GlowAnim anim,
                                                    uint16_t pulsePeriodMs, uint32_t now)
         {
@@ -31,30 +28,32 @@ namespace pipgui
             return (uint16_t)(res > 255 ? 255 : res);
         }
 
-        static inline uint8_t glowAlphaForOffset(uint32_t inv, uint16_t strength, int16_t off)
+        static inline uint8_t clampAlpha(int32_t value) noexcept
         {
-            const uint32_t n = (uint32_t)off * inv;
-            const uint32_t curve = (uint32_t)((uint64_t)(n * n >> 16) * n >> 16);
-            return (uint8_t)min(255U, (uint32_t)strength * curve >> 16);
+            if (value <= 0)
+                return 0;
+            if (value >= 255)
+                return 255;
+            return static_cast<uint8_t>(value);
         }
 
-        static inline uint8_t buildGlowLayers(uint16_t bg, uint16_t glow,
-                                              uint8_t glowSize, uint16_t strength,
-                                              GlowLayer *layers)
+        [[nodiscard]] static inline uint8_t glowAlphaAtDistance(float dist,
+                                                                int16_t radius,
+                                                                uint8_t glowSize,
+                                                                uint16_t strength) noexcept
         {
-            uint8_t count = 0;
-            const uint32_t inv = 65535U / glowSize;
-            for (int16_t off = glowSize; off > 0; --off)
-            {
-                const uint8_t alpha = glowAlphaForOffset(inv, strength, (int16_t)(glowSize - off + 1));
-                if (alpha < 2)
-                    continue;
-                const uint16_t color = detail::blend565(bg, glow, alpha);
-                if (count && layers[count - 1].color == color)
-                    continue;
-                layers[count++] = {off, color};
-            }
-            return count;
+            if (glowSize == 0 || strength == 0)
+                return 0;
+
+            float t = 1.0f - ((dist - static_cast<float>(radius)) / static_cast<float>(glowSize));
+            if (t <= 0.0f)
+                return 0;
+            if (t > 1.0f)
+                t = 1.0f;
+
+            const float smooth = t * t * (3.0f - 2.0f * t);
+            const float alpha = static_cast<float>(strength) * smooth;
+            return clampAlpha(static_cast<int32_t>(alpha + 0.5f));
         }
     }
 
@@ -88,11 +87,71 @@ namespace pipgui
             return;
         }
 
-        GlowLayer layers[255];
-        const uint8_t layerCount = buildGlowLayers(bg, glow, glowSize, strength, layers);
-        for (uint8_t i = 0; i < layerCount; ++i)
-            fillCircle(x, y, (int16_t)(r + layers[i].offset), layers[i].color);
-        fillCircle(x, y, r, fillColor);
+        pipcore::Sprite *spr = getDrawTarget();
+        Surface565 s;
+        if (!spr || !getSurface565(spr, s))
+            return;
+
+        const int16_t cx = static_cast<int16_t>(x - _render.originX);
+        const int16_t cy = static_cast<int16_t>(y - _render.originY);
+        const int16_t outerRi = static_cast<int16_t>(r + glowSize);
+        int16_t minX = static_cast<int16_t>(cx - outerRi - 1);
+        int16_t maxX = static_cast<int16_t>(cx + outerRi + 1);
+        int16_t minY = static_cast<int16_t>(cy - outerRi - 1);
+        int16_t maxY = static_cast<int16_t>(cy + outerRi + 1);
+        if (minX < s.clipX)
+            minX = static_cast<int16_t>(s.clipX);
+        if (maxX > s.clipR)
+            maxX = static_cast<int16_t>(s.clipR);
+        if (minY < s.clipY)
+            minY = static_cast<int16_t>(s.clipY);
+        if (maxY > s.clipB)
+            maxY = static_cast<int16_t>(s.clipB);
+        if (minX > maxX || minY > maxY)
+            return;
+
+        const Color565 fill = makeColor565(fillColor);
+        for (int16_t py = minY; py <= maxY; ++py)
+        {
+            uint16_t *row = s.buf + static_cast<int32_t>(py) * s.stride;
+            const float dy = static_cast<float>(py - cy);
+            for (int16_t px = minX; px <= maxX; ++px)
+            {
+                const float dx = static_cast<float>(px - cx);
+                const float dist = sqrtf(dx * dx + dy * dy);
+
+                const float innerEdge = static_cast<float>(r) - 0.5f;
+                const float outerEdge = static_cast<float>(r) + 0.5f;
+
+                if (dist <= innerEdge)
+                {
+                    row[px] = fill.fg;
+                    debugRecordPaintPixelLocal(px, py);
+                    continue;
+                }
+
+                if (dist <= static_cast<float>(outerR) + 0.5f)
+                {
+                    uint8_t glowAlpha = glowAlphaAtDistance(dist, r, glowSize, strength);
+                    if (dist > static_cast<float>(outerR) - 0.5f)
+                    {
+                        const float fade = static_cast<float>(outerR) + 0.5f - dist;
+                        glowAlpha = clampAlpha(static_cast<int32_t>(static_cast<float>(glowAlpha) * fade + 0.5f));
+                    }
+
+                    uint16_t color = (glowAlpha < 2) ? bg : detail::blend565(bg, glow, glowAlpha);
+                    if (dist < outerEdge)
+                    {
+                        const float coverage = outerEdge - dist;
+                        const uint8_t fillAlpha = clampAlpha(static_cast<int32_t>(coverage * 255.0f + 0.5f));
+                        color = detail::blend565(color, fillColor, fillAlpha);
+                    }
+
+                    row[px] = makeColor565(color).fg;
+                    debugRecordPaintPixelLocal(px, py);
+                }
+            }
+        }
     }
 
     void GUI::updateGlowCircle(int16_t x, int16_t y, int16_t r,
@@ -118,7 +177,14 @@ namespace pipgui
             (int16_t)(x - outerR - pad), (int16_t)(y - outerR - pad),
             (int16_t)(diam + pad * 2), (int16_t)(diam + pad * 2),
             [&]
-            { drawGlowCircle(x, y, r, fillColor, (int16_t)bg, glowColor, glowSize, glowStrength, anim, pulsePeriodMs); });
+            {
+                drawRect()
+                    .pos((int16_t)(x - outerR - pad), (int16_t)(y - outerR - pad))
+                    .size((int16_t)(diam + pad * 2), (int16_t)(diam + pad * 2))
+                    .fill(bg)
+                    .draw();
+                drawGlowCircle(x, y, r, fillColor, (int16_t)bg, glowColor, glowSize, glowStrength, anim, pulsePeriodMs);
+            });
     }
 
 }

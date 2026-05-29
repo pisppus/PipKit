@@ -529,12 +529,29 @@ namespace pipgui
 
             const uint32_t srcW16 = static_cast<uint32_t>(w) << 16;
             const uint32_t srcH16 = static_cast<uint32_t>(h) << 16;
-            const uint32_t scaleX16 = srcW16 / tw;
+            uint32_t scale16 = srcW16 / tw;
             const uint32_t scaleY16 = srcH16 / th;
+            if (scaleY16 < scale16)
+                scale16 = scaleY16;
+            if (scale16 == 0)
+                scale16 = 1;
+
+            uint32_t cropW16 = scale16 * tw;
+            uint32_t cropH16 = scale16 * th;
+            if (cropW16 > srcW16)
+                cropW16 = srcW16;
+            if (cropH16 > srcH16)
+                cropH16 = srcH16;
+            const uint32_t cropX16 = (srcW16 > cropW16) ? ((srcW16 - cropW16) / 2u) : 0u;
+            const uint32_t cropY16 = (srcH16 > cropH16) ? ((srcH16 - cropH16) / 2u) : 0u;
+            const uint32_t cropXEnd16 = cropX16 + cropW16;
+            const uint32_t cropYEnd16 = cropY16 + cropH16;
 
             uint16_t dy = 0;
-            uint32_t y0 = 0;
-            uint32_t y1 = (th == 1) ? srcH16 : scaleY16;
+            uint32_t y0 = cropY16;
+            uint32_t y1 = (th == 1) ? cropYEnd16 : (cropY16 + scale16);
+            if (y1 > cropYEnd16)
+                y1 = cropYEnd16;
 
             uint16_t *row565 = reinterpret_cast<uint16_t *>(_shots.rowBuf);
 
@@ -547,8 +564,12 @@ namespace pipgui
                     uint16_t *dstRow = dst + static_cast<uint32_t>(dy) * tw;
                     for (uint16_t dx = 0; dx < tw; ++dx)
                     {
-                        const uint32_t x0 = static_cast<uint32_t>(dx) * scaleX16;
-                        const uint32_t x1 = (dx + 1u == tw) ? srcW16 : (x0 + scaleX16);
+                        uint32_t x0 = cropX16 + static_cast<uint32_t>(dx) * scale16;
+                        uint32_t x1 = (dx + 1u == tw) ? cropXEnd16 : (x0 + scale16);
+                        if (x1 > cropXEnd16)
+                            x1 = cropXEnd16;
+                        if (x0 >= x1)
+                            x0 = (x1 > 0) ? (x1 - 1u) : 0u;
                         const uint64_t total = static_cast<uint64_t>(x1 - x0) * static_cast<uint64_t>(yLen);
                         if (!total)
                         {
@@ -571,20 +592,28 @@ namespace pipgui
 
                     ++dy;
                     y0 = y1;
-                    y1 = (dy + 1u >= th) ? srcH16 : (y0 + scaleY16);
+                    y1 = (dy + 1u >= th) ? cropYEnd16 : (y0 + scale16);
+                    if (y1 > cropYEnd16)
+                        y1 = cropYEnd16;
                 }
 
                 if (dy >= th)
                     return true;
 
                 const uint32_t wy0 = ssd::overlap16(y0, y1, rowStart);
-                const uint32_t y2 = (dy + 2u >= th) ? srcH16 : (y1 + scaleY16);
+                uint32_t y2 = (dy + 2u >= th) ? cropYEnd16 : (y1 + scale16);
+                if (y2 > cropYEnd16)
+                    y2 = cropYEnd16;
                 const uint32_t wy1 = (dy + 1u < th) ? ssd::overlap16(y1, y2, rowStart) : 0u;
 
                 for (uint16_t dx = 0; dx < tw; ++dx)
                 {
-                    const uint32_t x0 = static_cast<uint32_t>(dx) * scaleX16;
-                    const uint32_t x1 = (dx + 1u == tw) ? srcW16 : (x0 + scaleX16);
+                    uint32_t x0 = cropX16 + static_cast<uint32_t>(dx) * scale16;
+                    uint32_t x1 = (dx + 1u == tw) ? cropXEnd16 : (x0 + scale16);
+                    if (x1 > cropXEnd16)
+                        x1 = cropXEnd16;
+                    if (x0 >= x1)
+                        x0 = (x1 > 0) ? (x1 - 1u) : 0u;
                     const uint16_t sx0 = static_cast<uint16_t>(x0 >> 16);
                     const uint16_t sx1 = static_cast<uint16_t>((x1 - 1u) >> 16);
 
@@ -650,8 +679,12 @@ namespace pipgui
                 uint16_t *dstRow = dst + static_cast<uint32_t>(dy) * tw;
                 for (uint16_t dx = 0; dx < tw; ++dx)
                 {
-                    const uint32_t x0 = static_cast<uint32_t>(dx) * scaleX16;
-                    const uint32_t x1 = (dx + 1u == tw) ? srcW16 : (x0 + scaleX16);
+                    uint32_t x0 = cropX16 + static_cast<uint32_t>(dx) * scale16;
+                    uint32_t x1 = (dx + 1u == tw) ? cropXEnd16 : (x0 + scale16);
+                    if (x1 > cropXEnd16)
+                        x1 = cropXEnd16;
+                    if (x0 >= x1)
+                        x0 = (x1 > 0) ? (x1 - 1u) : 0u;
                     const uint64_t total = static_cast<uint64_t>(x1 - x0) * static_cast<uint64_t>(yLen);
                     if (!total)
                     {
@@ -674,7 +707,9 @@ namespace pipgui
 
                 ++dy;
                 y0 = y1;
-                y1 = (dy + 1u >= th) ? srcH16 : (y0 + scaleY16);
+                y1 = (dy + 1u >= th) ? cropYEnd16 : (y0 + scale16);
+                if (y1 > cropYEnd16)
+                    y1 = cropYEnd16;
             }
 
             file.close();

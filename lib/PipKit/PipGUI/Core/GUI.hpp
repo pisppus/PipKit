@@ -118,10 +118,12 @@ namespace pipgui
 
     struct DrawTextMarqueeFluent;
     struct DrawTextEllipsizedFluent;
+    struct DrawTextBoxFluent;
 
-    struct ListInputFluent;
+    struct BindNavFluent;
+    struct UseListNavFluent;
+    struct UseTileNavFluent;
     struct UpdateListFluent;
-    struct TileInputFluent;
     struct UpdateTileFluent;
     struct PopupMenuInputFluent;
 
@@ -134,6 +136,7 @@ namespace pipgui
     {
         struct GuiAccess;
         struct TextFontGuard;
+        [[nodiscard]] bool recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept;
     }
 
     class GUI
@@ -181,11 +184,6 @@ namespace pipgui
         [[nodiscard]] DrawScreenshotFluent drawScreenshot();
         InputState pollInput(Button &next, Button &prev);
         InputState pollInput(Button &next, Button &prev, Button &select);
-        void consumeAutoNav() noexcept
-        {
-            _navConsumed = true;
-            _manualInputMask |= ManualInput_Nav;
-        }
         void setAdaptivePreview(uint16_t minWidth, uint16_t minHeight, uint32_t cycleMs = 3600);
         void clearAdaptivePreview() noexcept;
         void setRotation(uint8_t rotation, uint32_t durationMs = 520);
@@ -282,6 +280,7 @@ namespace pipgui
         [[nodiscard]] UpdateTextFluent updateText();
         [[nodiscard]] DrawTextMarqueeFluent drawTextMarquee();
         [[nodiscard]] DrawTextEllipsizedFluent drawTextEllipsized();
+        [[nodiscard]] DrawTextBoxFluent drawTextBox();
 
         FontId registerFont(const uint8_t *atlasData,
                             uint16_t atlasWidth, uint16_t atlasHeight,
@@ -301,10 +300,11 @@ namespace pipgui
         void setTextStyle(TextStyle style);
 
         UpdateListFluent updateList();
-        [[nodiscard]] ListInputFluent listInput();
+        [[nodiscard]] BindNavFluent nav();
+        [[nodiscard]] UseListNavFluent listNav();
 
         UpdateTileFluent updateTile();
-        [[nodiscard]] TileInputFluent tileInput();
+        [[nodiscard]] UseTileNavFluent tileNav();
 
         void setScreen(uint8_t id);
         [[nodiscard]] uint8_t currentScreen() const noexcept;
@@ -352,12 +352,26 @@ namespace pipgui
 
         [[nodiscard]] uint16_t screenWidth() const noexcept { return _render.screenWidth; }
         [[nodiscard]] uint16_t screenHeight() const noexcept { return _render.screenHeight; }
+        [[nodiscard]] UiRect area(int16_t x, int16_t y, int16_t w, int16_t h) const noexcept
+        {
+            return UiRect{x, y, w, h};
+        }
+        [[nodiscard]] UiRect screenRect() const noexcept
+        {
+            return UiRect{0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight};
+        }
+        [[nodiscard]] UiBox box() const noexcept { return UiBox(screenRect()); }
+        [[nodiscard]] UiBox box(const UiRect &area) const noexcept { return UiBox(area); }
+        [[nodiscard]] int16_t centerX(int32_t contentWidth = 0) const { return AutoX(contentWidth); }
+        [[nodiscard]] int16_t centerY(int32_t contentHeight = 0) const { return AutoY(contentHeight); }
 
     private:
         friend struct detail::GuiAccess;
         friend struct detail::TextFontGuard;
-        friend struct ListInputFluent;
-        friend struct TileInputFluent;
+        friend bool detail::recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept;
+        friend struct BindNavFluent;
+        friend struct UseListNavFluent;
+        friend struct UseTileNavFluent;
         friend struct PopupMenuInputFluent;
         using DirtyRect = detail::DirtyRect;
         using ClipState = detail::ClipState;
@@ -366,12 +380,9 @@ namespace pipgui
 
         enum ManualInputMask : uint8_t
         {
-            ManualInput_List = 1u << 0,
-            ManualInput_Tile = 1u << 1,
-            ManualInput_Popup = 1u << 2,
-            ManualInput_Notif = 1u << 3,
-            ManualInput_Error = 1u << 4,
-            ManualInput_Nav = 1u << 5,
+            ManualInput_Popup = 1u << 0,
+            ManualInput_Notif = 1u << 1,
+            ManualInput_Error = 1u << 2,
         };
         detail::DisplayState _disp;
         detail::RenderState _render;
@@ -389,14 +400,39 @@ namespace pipgui
         detail::Flags _flags = {};
         detail::DiagnosticsState _diag;
         InputState _input = {};
+        detail::NavDispatchState _nav = {};
         uint8_t _manualInputMask = 0;
-        bool _navConsumed = false;
         detail::ButtonCacheState _buttonCache;
         detail::SliderCacheState _sliderCache;
         detail::TextCacheState _textCache;
         detail::ToggleCacheState _toggleCache;
+        detail::MarqueePhaseCacheState _marqueePhaseCache;
 
         InputState pollInputInternal(Button &next, Button &prev, Button *select);
+        void resetNavDispatch() noexcept;
+        void bindNavHandler(uint8_t screenId, NavHandler handler, void *userData) noexcept;
+        void bindListNav(uint8_t screenId) noexcept;
+        void bindTileNav(uint8_t screenId) noexcept;
+        [[nodiscard]] bool dispatchNavInput(uint8_t screenId, const InputState &input);
+        [[nodiscard]] bool dispatchNavButton(detail::NavButtonDispatchState &state,
+                                            uint8_t screenId,
+                                            const InputState &input,
+                                            NavButton button,
+                                            bool down,
+                                            NavHandler handler,
+                                            void *userData,
+                                            uint32_t now);
+        [[nodiscard]] bool emitNavEvent(uint8_t screenId,
+                                        const InputState &input,
+                                        NavHandler handler,
+                                        void *userData,
+                                        NavButton button,
+                                        NavEventCode code,
+                                        uint32_t now,
+                                        uint32_t heldMs,
+                                        bool longPress);
+        static bool handleListNavEvent(GUI &gui, const NavEvent &event, void *userData);
+        static bool handleTileNavEvent(GUI &gui, const NavEvent &event, void *userData);
         detail::DrumRollCacheState _drumRollCache;
         detail::ScreenshotGalleryState _shots;
         detail::ScreenshotStreamState _shotStream;
@@ -411,14 +447,26 @@ namespace pipgui
         [[nodiscard]] float presentationAngleRad(uint8_t rotation) const noexcept;
         [[nodiscard]] bool presentOrthogonalRotatedSprite(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
                                                           uint8_t rotationDelta, const char *stage);
+        [[nodiscard]] bool presentOrthogonalRotatedSpriteRegion(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
+                                                                uint8_t rotationDelta,
+                                                                int16_t srcX, int16_t srcY, int16_t rectW, int16_t rectH,
+                                                                const char *stage);
         void serviceAdaptivePreview(uint32_t now) noexcept;
         [[nodiscard]] bool presentAdaptivePreview(const char *stage);
         void freeAdaptivePreviewBuffer(pipcore::Platform *plat) noexcept;
         void freeRotationBuffer(pipcore::Platform *plat) noexcept;
+        void freeRotationLineBuffer(pipcore::Platform *plat) noexcept;
+        [[nodiscard]] bool ensureRotationLineBuffer(uint32_t pixels) noexcept;
+        void renderCurrentFrameToTileBand(int16_t tileY, int16_t h, uint32_t now);
+        [[nodiscard]] bool presentTransformedTiledFrame(float angleRad, float scale, uint32_t now, const char *stage);
         [[nodiscard]] bool presentTransformedSprite(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
+                                                    int16_t logicalW, int16_t logicalH,
                                                     float angleRad, float scale, const char *stage);
         void renderRotationTransition(uint32_t now);
-        [[nodiscard]] bool applyLogicalRotation(uint8_t rotation);
+        [[nodiscard]] bool applyLogicalRotation(uint8_t rotation, bool allowAutoTiledFallback = true);
+        [[nodiscard]] bool recoverFromAllocationFailure(size_t bytes, pipcore::AllocCaps caps) noexcept;
+        [[nodiscard]] bool tryPromoteAutoTiledCanvas(uint32_t now) noexcept;
+        [[nodiscard]] bool releaseGraphCachesForRecovery(pipcore::Platform *plat) noexcept;
 
         void initFonts();
         void applyClip(int16_t x, int16_t y, int16_t w, int16_t h);
@@ -459,6 +507,12 @@ namespace pipgui
         {
             if (!_flags.tiledMode || !_flags.spriteEnabled || !_disp.display || w <= 0 || h <= 0)
                 return;
+
+            if (logicalRotationActive())
+            {
+                invalidateRect(x, y, w, h);
+                return;
+            }
 
             const int16_t sw = (int16_t)_render.screenWidth;
             const int16_t sh = (int16_t)_render.screenHeight;
@@ -675,9 +729,18 @@ namespace pipgui
                                 int16_t maxWidth,
                                 uint16_t fg565,
                                 TextAlign align = TextAlign::Left);
+        bool drawTextBox(const String &text,
+                         int16_t x, int16_t y,
+                         int16_t w, int16_t h,
+                         uint16_t fg565, uint16_t bg565,
+                         TextAlign align = TextAlign::Left,
+                         int16_t lineGap = -1);
 
-        bool ensureBlurWorkBuffers(uint32_t smallLen, int16_t sw, int16_t sh, int16_t w, int16_t h) noexcept;
+        bool ensureBlurWorkBuffers(uint32_t smallLen, int16_t sw, int16_t sh,
+                                   int16_t w, int16_t h, uint8_t radiusSmall) noexcept;
         void freeBlurBuffers(pipcore::Platform *plat) noexcept;
+        [[nodiscard]] bool ensureBlurCaptureSprite(int16_t w, int16_t h) noexcept;
+        bool renderBlurBackdropToSprite(pipcore::Sprite &dst, int16_t x, int16_t y, int16_t w, int16_t h);
         void drawBlurRegion(int16_t x, int16_t y, int16_t w, int16_t h,
                             uint8_t radius, BlurDirection dir,
                             bool gradient, uint8_t materialStrength,
@@ -792,7 +855,6 @@ namespace pipgui
         ListState *getList(uint8_t screenId);
         TileState *getTile(uint8_t screenId);
 
-        void handleListInput(uint8_t screenId, const InputState &input);
         bool renderListState(ListState &menu,
                              int16_t x, int16_t y,
                              int16_t w, int16_t h,
@@ -804,7 +866,6 @@ namespace pipgui
                               int16_t w, int16_t h,
                               uint16_t bgColor565);
         void updateTile(uint8_t screenId, uint8_t prevSelectedIndex);
-        void handleTileInput(uint8_t screenId, const InputState &input);
         void setupTileState(uint8_t screenId,
                             const TileItemDef *items,
                             uint8_t itemCount,

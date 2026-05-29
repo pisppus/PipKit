@@ -15,6 +15,11 @@
 
 namespace pipgui
 {
+    namespace detail
+    {
+        [[nodiscard]] bool recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept;
+    }
+
     namespace
     {
         [[nodiscard]] inline uint32_t overdrawByteCount(uint16_t w, uint16_t h) noexcept
@@ -42,6 +47,13 @@ namespace pipgui
             if (!plat)
                 return false;
             DirtyRect *newRects = static_cast<DirtyRect *>(plat->alloc(sizeof(DirtyRect) * newCap, pipcore::AllocCaps::Default));
+            if (!newRects &&
+                detail::recoverFromAllocFailure(plat,
+                                                sizeof(DirtyRect) * static_cast<size_t>(newCap),
+                                                pipcore::AllocCaps::Default))
+            {
+                newRects = static_cast<DirtyRect *>(plat->alloc(sizeof(DirtyRect) * newCap, pipcore::AllocCaps::Default));
+            }
             if (!newRects)
                 return false;
             for (uint16_t i = 0; i < count; ++i)
@@ -274,7 +286,7 @@ namespace pipgui
                 }
 
                 const size_t remaining = static_cast<size_t>(slot.len - g_memoryLogTailOffset);
-                const size_t chunk = (remaining < budget) ? remaining : budget;
+                const size_t chunk = (budget < remaining) ? budget : remaining;
                 const size_t wrote = Serial.write(reinterpret_cast<const uint8_t *>(slot.text + g_memoryLogTailOffset), chunk);
                 if (wrote == 0)
                     break;
@@ -514,6 +526,8 @@ namespace pipgui
             if (!plat)
                 return;
             uint8_t *newBuf = static_cast<uint8_t *>(plat->alloc(neededBytes, pipcore::AllocCaps::Default));
+            if (!newBuf && detail::recoverFromAllocFailure(plat, neededBytes, pipcore::AllocCaps::Default))
+                newBuf = static_cast<uint8_t *>(plat->alloc(neededBytes, pipcore::AllocCaps::Default));
             if (!newBuf)
                 return;
             if (_overdrawCounts)

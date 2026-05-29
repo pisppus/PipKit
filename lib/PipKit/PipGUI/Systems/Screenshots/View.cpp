@@ -156,16 +156,33 @@ namespace pipgui
                 const bool bgBright = (detail::autoTextColor(bg565) == 0x0000);
                 const uint16_t fg565 = bgBright ? detail::blend565(bg565, 0x0000, 180) : detail::blend565(bg565, 0xFFFF, 200);
 
-#if (PIPGUI_SCREENSHOT_MODE == 2)
-                const bool loading = !_shots.flashScanDone;
-                const String msg = loading ? "Loading..." : "No screenshots";
-                const String hint = loading ? String() : "Hold both buttons to capture";
-#else
-                const String msg = "No screenshots";
-                const String hint = "Hold both buttons to capture";
-#endif
                 const int16_t tx = static_cast<int16_t>(x + (int32_t)w / 2);
                 const int16_t midY = static_cast<int16_t>(y + (int32_t)h / 2);
+
+#if (PIPGUI_SCREENSHOT_MODE == 2)
+                const bool loading = loadingFlash;
+                if (loading)
+                {
+                    const uint16_t minSide = static_cast<uint16_t>((w < h) ? w : h);
+                    int16_t radius = static_cast<int16_t>(minSide / 5u);
+                    if (radius < 7)
+                        radius = 7;
+                    if (radius > 24)
+                        radius = 24;
+                    uint8_t thickness = static_cast<uint8_t>(radius / 5);
+                    if (thickness < 2)
+                        thickness = 2;
+                    if (thickness > 5)
+                        thickness = 5;
+
+                    const uint16_t base565 = bgBright ? detail::blend565(bg565, 0x0000, 42) : detail::blend565(bg565, 0xFFFF, 34);
+                    drawCircleProgress(tx, midY, radius, thickness, 0, base565, fg565, Indeterminate);
+                    break;
+                }
+#endif
+
+                const String msg = "No screenshots";
+                const String hint = "Hold both buttons to capture";
 
                 int16_t mtw = 0, mth = 0;
                 (void)measureText(msg, mtw, mth);

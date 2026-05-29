@@ -1,69 +1,75 @@
-SCREEN(circle, 29)
+SCREEN(circle, ScreenCircle)
 {
-  const uint16_t bg565 = ui.rgb(16, 16, 24);
-  ui.clear(bg565);
+    const uint16_t bg565 = bg(ui);
+    const uint16_t panel565 = panel(ui);
+    const auto body = bodyInset(ui, 12, 10, 8);
+    const auto left = splitLeft(body, 10);
+    const auto right = splitRight(body, 10);
+    const uint16_t text565 = fg(ui);
 
-  ui.setTextStyle(H2);
-  ui.drawText().text("Circle / RoundRect").pos(-1, 8).color(ui.rgb(255, 255, 255)).bgColor(bg565).align(Center);
-  ui.setTextStyle(Caption);
-  ui.drawText().text("draw shapes with fill / border").pos(-1, 28).color(ui.rgb(160, 160, 200)).bgColor(bg565).align(Center);
+    ui.clear(bg565);
+    drawHeader(ui, "Circles", "Filled circles on the left, stroked circles on the right", warn(ui));
+    drawPanel(ui, left.x, left.y, left.w, left.h, panel565, line(ui), 12);
+    drawPanel(ui, right.x, right.y, right.w, right.h, panel565, line(ui), 12);
 
-  ui.drawCircle()
-      .pos(48, 78)
-      .radius(22)
-      .fill(ui.rgb(0, 87, 250))
-      .border(1, ui.rgb(255, 255, 255));
+    auto title = ui.drawText()
+                     .font(WixMadeForDisplay, 12)
+                     .weight(Semibold)
+                     .color(text565)
+                     .bgColor(panel565)
+                     .align(Center);
 
-  ui.drawRect()
-      .pos(88, 52)
-      .size(140, 44)
-      .fill(ui.rgb(80, 255, 120))
-      .radius(12);
+    title.derive()
+        .text("Filled")
+        .pos(left.x + left.w / 2, left.y + 10);
 
-  ui.drawRect()
-      .pos(88, 104)
-      .size(140, 44)
-      .fill(ui.rgb(255, 128, 0))
-      .radius(20, 6, 20, 6);
+    title.derive()
+        .text("Border only")
+        .pos(right.x + right.w / 2, right.y + 10);
 
-  ui.drawRect()
-      .pos(12, 160)
-      .size(100, 44)
-      .border(1, ui.rgb(255, 255, 255))
-      .radius(12);
+    ui.drawCircle()
+        .pos(left.x + 34, left.y + 54)
+        .radius(12)
+        .fill(accent(ui))
+        .border(1, text565);
 
-  ui.drawRect()
-      .pos(12, 214)
-      .size(100, 44)
-      .border(1, ui.rgb(255, 255, 255))
-      .radius(20, 6, 20, 6);
+    ui.drawCircle()
+        .pos(left.x + 76, left.y + 74)
+        .radius(18)
+        .fill(accent2(ui))
+        .border(1, text565);
 
-  ui.drawEllipse()
-      .pos(175, 190)
-      .radiusX(46)
-      .radiusY(20)
-      .fill(ui.rgb(255, 0, 72));
+    ui.drawCircle()
+        .pos(left.x + 46, left.y + 122)
+        .radius(22)
+        .fill(warn(ui))
+        .border(1, text565);
 
-  ui.drawArc()
-      .pos(175, 250)
-      .radius(24)
-      .start(-90.0f)
-      .end(180.0f)
-      .color(ui.rgb(255, 255, 255));
+    ui.drawCircle()
+        .pos(left.x + 84, left.y + 154)
+        .radius(16)
+        .fill(danger(ui))
+        .border(1, text565);
 
-  ui.drawLine()
-      .from(120, 270)
-      .to(230, 300)
-      .color(ui.rgb(255, 255, 255));
+    ui.drawCircle()
+        .pos(right.x + 36, right.y + 54)
+        .radius(12)
+        .border(1, accent(ui));
 
-  ui.setTextStyle(Caption);
-  ui.drawText().text("circle fill+border").pos(48, 108).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("rect fill r=12").pos(158, 46).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("rect fill {20,6,20,6}").pos(158, 98).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("rect border r=12").pos(62, 154).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("rect border {20,6,20,6}").pos(62, 208).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("ellipse fill").pos(175, 216).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("drawArc").pos(175, 276).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("drawLine").pos(175, 304).color(ui.rgb(180, 180, 200)).bgColor(bg565).align(Center);
-  ui.drawText().text("Next/Prev: change screen").pos(-1, 235).color(ui.rgb(120, 120, 140)).bgColor(bg565).align(Center);
+    ui.drawCircle()
+        .pos(right.x + 78, right.y + 74)
+        .radius(18)
+        .border(1, accent2(ui));
+
+    ui.drawCircle()
+        .pos(right.x + 46, right.y + 122)
+        .radius(22)
+        .border(1, warn(ui));
+
+    ui.drawCircle()
+        .pos(right.x + 84, right.y + 154)
+        .radius(16)
+        .border(1, danger(ui));
+
+    drawFooter(ui, "PREV back");
 }

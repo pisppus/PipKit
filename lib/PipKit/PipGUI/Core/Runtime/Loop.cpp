@@ -151,6 +151,9 @@ namespace pipgui
         if (!_disp.display || !_flags.spriteEnabled)
             return;
 
+        const bool adaptivePreview = adaptivePreviewActive();
+        const uint8_t rotationDelta = logicalRotationActive() ? logicalRotationDelta() : 0;
+        const bool tiledRotation = rotationDelta != 0;
         const int16_t sw = (int16_t)_render.screenWidth;
         const int16_t sh = (int16_t)_render.screenHeight;
         const int16_t tileH = _render.sprite.height();
@@ -178,6 +181,10 @@ namespace pipgui
         }
 #endif
         const bool overlaysFullFrame = _flags.notifActive;
+        const DirtyRect prevPopup = _popup.lastRect;
+        const bool hadPrevPopup = _popup.lastRectValid;
+        const DirtyRect prevToast = _toast.lastRect;
+        const bool hadPrevToast = _toast.lastRectValid;
         DirtyRect curPopup = {};
         const uint32_t popupDur = _popup.animDurationMs ? _popup.animDurationMs : 1;
         const bool popupCloseFinished = _flags.popupClosing && (now - _popup.startMs) >= popupDur;
@@ -185,42 +192,325 @@ namespace pipgui
         {
             _flags.popupActive = 0;
             _flags.popupClosing = 0;
+            requestRedraw();
         }
-        const bool curPopupVisible = (_flags.popupActive || _popup.lastRectValid) ? computePopupBounds(now, curPopup) : false;
+        const bool curPopupVisible = (_flags.popupActive || hadPrevPopup) ? computePopupBounds(now, curPopup) : false;
 
         DirtyRect curToast = {};
-        const bool curToastVisible = (_flags.toastActive || _toast.lastRectValid) ? computeToastBounds(now, curToast) : false;
+        const bool curToastVisible = (_flags.toastActive || hadPrevToast) ? computeToastBounds(now, curToast) : false;
 
-        auto pushDirty = [&](const DirtyRect &r) noexcept
+        if (_dirty.count > 1)
+            compactDirty(_dirty, sw, sh);
+
+        const auto rectEmpty = [](const DirtyRect &r) noexcept
         {
-            if (r.w <= 0 || r.h <= 0)
-                return;
-            invalidateRect(r.x, r.y, r.w, r.h);
+            return r.w <= 0 || r.h <= 0;
         };
-        if (curPopupVisible)
-            pushDirty(curPopup);
-        if (_popup.lastRectValid)
-            pushDirty(_popup.lastRect);
-        if (curToastVisible)
-            pushDirty(curToast);
-        if (_toast.lastRectValid)
-            pushDirty(_toast.lastRect);
+        const auto rectUnion = [&](const DirtyRect &a, const DirtyRect &b) noexcept -> DirtyRect
+        {
+            if (rectEmpty(a))
+                return b;
+            if (rectEmpty(b))
+                return a;
+            const int16_t x1 = (a.x < b.x) ? a.x : b.x;
+            const int16_t y1 = (a.y < b.y) ? a.y : b.y;
+            const int16_t x2 = (int16_t)std::max<int32_t>((int32_t)a.x + a.w, (int32_t)b.x + b.w);
+            const int16_t y2 = (int16_t)std::max<int32_t>((int32_t)a.y + a.h, (int32_t)b.y + b.h);
+            return DirtyRect{x1, y1, (int16_t)(x2 - x1), (int16_t)(y2 - y1)};
+        };
+        const auto ensureRotationLineBuf = [&](uint16_t needLen) noexcept -> bool
+        {
+            if (_rotationAnim.lineBufCap < needLen)
+            {
+                pipcore::Platform *plat = platform();
+                uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
+                if (!newBuf)
+                {
+                    if (plat)
+                        (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
+                    newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+                }
+                if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                    newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default));
+                if (newBuf)
+                {
+                    freeRotationLineBuffer(plat);
+                    _rotationAnim.lineBuf = newBuf;
+                    _rotationAnim.lineBufCap = needLen;
+                }
+            }
+            return _rotationAnim.lineBuf && _rotationAnim.lineBufCap >= needLen;
+        };
+        const auto ensureAdaptiveLineBuf = [&](uint16_t needLen) noexcept -> bool
+        {
+            if (_adaptivePreview.lineBufCap < needLen)
+            {
+                pipcore::Platform *plat = platform();
+                uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
+                if (!newBuf)
+                {
+                    if (plat)
+                        (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
+                    newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+                }
+                if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                    newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default));
+                if (newBuf)
+                {
+                    freeAdaptivePreviewBuffer(plat);
+                    _adaptivePreview.lineBuf = newBuf;
+                    _adaptivePreview.lineBufCap = needLen;
+                }
+            }
+            return _adaptivePreview.lineBuf && _adaptivePreview.lineBufCap >= needLen;
+        };
+        const auto clearAdaptivePreviewShrunkStrips = [&]() noexcept
+        {
+            if (!adaptivePreview)
+                return;
 
-        if ((curPopupVisible || _popup.lastRectValid || curToastVisible || _toast.lastRectValid) && _dirty.count > 0)
-            _flags.dirtyRedrawPending = 1;
+            const uint16_t curOutW = tiledRotation && (rotationDelta & 1U) ? _render.screenHeight : _render.screenWidth;
+            const uint16_t curOutH = tiledRotation && (rotationDelta & 1U) ? _render.screenWidth : _render.screenHeight;
+            const uint16_t prevW = _adaptivePreview.lastOutputW ? _adaptivePreview.lastOutputW : _adaptivePreview.lastPresentedW;
+            const uint16_t prevH = _adaptivePreview.lastOutputH ? _adaptivePreview.lastOutputH : _adaptivePreview.lastPresentedH;
+            if ((prevW == 0 && prevH == 0) || (prevW <= curOutW && prevH <= curOutH))
+                return;
+            const uint16_t clearLineLen = (_render.physicalWidth > _render.physicalHeight) ? _render.physicalWidth : _render.physicalHeight;
+            if (!ensureAdaptiveLineBuf(clearLineLen))
+                return;
+
+            const uint16_t bg = pipcore::Sprite::swap16(_render.bgColor565);
+            for (uint16_t x = 0; x < clearLineLen; ++x)
+                _adaptivePreview.lineBuf[x] = bg;
+
+            if (curOutW < prevW)
+            {
+                const int16_t clearW = static_cast<int16_t>(prevW - curOutW);
+                const int16_t clearH = static_cast<int16_t>((prevH > curOutH) ? prevH : curOutH);
+                for (int16_t y = 0; y < clearH; ++y)
+                {
+                    _disp.display->writeRect565((int16_t)curOutW, y, clearW, 1,
+                                                _adaptivePreview.lineBuf, clearW);
+                }
+            }
+
+            if (curOutH < prevH)
+            {
+                const int16_t clearW = static_cast<int16_t>((prevW > curOutW) ? prevW : curOutW);
+                const int16_t clearH = static_cast<int16_t>(prevH - curOutH);
+                for (int16_t y = 0; y < clearH; ++y)
+                {
+                    _disp.display->writeRect565(0, (int16_t)(curOutH + y), clearW, 1,
+                                                _adaptivePreview.lineBuf, clearW);
+                }
+            }
+        };
+        auto renderTileBand = [&](int16_t tileY, int16_t h)
+        {
+            _render.originX = 0;
+            _render.originY = tileY;
+            _render.sprite.setClipRect(0, 0, stride, tileH);
+
+            if (_flags.bootActive)
+            {
+                renderBootFrame(now);
+            }
+            else if (_flags.errorActive)
+            {
+                renderErrorFrame(now);
+            }
+            else if (_screen.current < _screen.capacity)
+            {
+                if (currentCb)
+                    renderScreenToMainSprite(currentCb, _screen.current);
+                else
+                    renderScreenToMainSprite(nullptr, _screen.current);
+
+                renderStatusBar();
+                if (_flags.notifActive)
+                    renderNotificationOverlay();
+                if (_flags.popupActive)
+                    renderPopupMenuOverlay(now);
+                if (_flags.toastActive)
+                    renderToastOverlay(now);
+            }
+            else
+            {
+                const bool prevRender = _flags.inSpritePass;
+                pipcore::Sprite *prevActive = _render.activeSprite;
+                _flags.inSpritePass = 1;
+                _render.activeSprite = &_render.sprite;
+                clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                _render.activeSprite = prevActive;
+                _flags.inSpritePass = prevRender;
+            }
+            (void)h;
+        };
+        const auto presentRotatedTiledFrame = [&](const char *stage) noexcept
+        {
+            const int16_t physW = (int16_t)_render.physicalWidth;
+            const int16_t physH = (int16_t)_render.physicalHeight;
+            constexpr int16_t kChunkRows = 8;
+            const uint16_t chunkLineLen = static_cast<uint16_t>(std::max<int32_t>(physW,
+                                                                                  std::max<int32_t>(sw, tileH) * kChunkRows));
+            if (!ensureRotationLineBuf(chunkLineLen))
+                return false;
+
+            const int16_t maxBandY = (sh > 0) ? static_cast<int16_t>(((sh - 1) / tileH) * tileH) : 0;
+            const bool fullCoverage = ((rotationDelta & 1U) != 0U)
+                                          ? (sw == physH && sh == physW)
+                                          : (sw == physW && sh == physH);
+
+            (void)fullCoverage;
+
+            switch (rotationDelta & 3U)
+            {
+            case 1:
+                for (int16_t bandY = maxBandY; bandY >= 0; bandY = (bandY >= tileH) ? static_cast<int16_t>(bandY - tileH) : static_cast<int16_t>(-1))
+                {
+                    const int16_t bandH = (int16_t)std::min<int32_t>(tileH, (int32_t)sh - bandY);
+                    const int16_t xStart = (int16_t)(sh - bandY - bandH);
+                    renderTileBand(bandY, bandH);
+
+                    const int16_t dstH = static_cast<int16_t>(std::min<int32_t>(physH, sw));
+                    for (int16_t y0 = 0; y0 < dstH; y0 = static_cast<int16_t>(y0 + kChunkRows))
+                    {
+                        const int16_t chunkH = static_cast<int16_t>(std::min<int32_t>(kChunkRows, dstH - y0));
+                        for (int16_t row = 0; row < chunkH; ++row)
+                        {
+                            const int16_t y = static_cast<int16_t>(y0 + row);
+                            uint16_t *dst = _rotationAnim.lineBuf + static_cast<size_t>(row) * bandH;
+                            for (int16_t i = 0; i < bandH; ++i)
+                                dst[i] = buf[(size_t)(bandH - 1 - i) * stride + (size_t)y];
+                        }
+                        _disp.display->writeRect565(xStart, y0, bandH, chunkH, _rotationAnim.lineBuf, bandH);
+                    }
+                }
+                break;
+
+            case 2:
+                for (int16_t bandY = 0; bandY < sh; bandY = (int16_t)(bandY + tileH))
+                {
+                    const int16_t bandH = (int16_t)std::min<int32_t>(tileH, (int32_t)sh - bandY);
+                    renderTileBand(bandY, bandH);
+
+                    const int16_t dstStartY = static_cast<int16_t>(sh - bandY - bandH);
+                    for (int16_t y0 = 0; y0 < bandH; y0 = static_cast<int16_t>(y0 + kChunkRows))
+                    {
+                        const int16_t chunkH = static_cast<int16_t>(std::min<int32_t>(kChunkRows, bandH - y0));
+                        for (int16_t row = 0; row < chunkH; ++row)
+                        {
+                            const int16_t dstY = static_cast<int16_t>(dstStartY + y0 + row);
+                            const int16_t localY = static_cast<int16_t>(sh - 1 - dstY - bandY);
+                            const uint16_t *srcRow = buf + (size_t)localY * stride;
+                            uint16_t *dst = _rotationAnim.lineBuf + static_cast<size_t>(row) * sw;
+                            for (int16_t x = 0; x < sw; ++x)
+                                dst[x] = srcRow[sw - 1 - x];
+                        }
+                        _disp.display->writeRect565(0, static_cast<int16_t>(dstStartY + y0), sw, chunkH, _rotationAnim.lineBuf, sw);
+                    }
+                }
+                break;
+
+            case 3:
+                for (int16_t bandY = 0; bandY < sh; bandY = (int16_t)(bandY + tileH))
+                {
+                    const int16_t bandH = (int16_t)std::min<int32_t>(tileH, (int32_t)sh - bandY);
+                    const int16_t xStart = bandY;
+                    renderTileBand(bandY, bandH);
+
+                    const int16_t dstH = static_cast<int16_t>(std::min<int32_t>(physH, sw));
+                    for (int16_t y0 = 0; y0 < dstH; y0 = static_cast<int16_t>(y0 + kChunkRows))
+                    {
+                        const int16_t chunkH = static_cast<int16_t>(std::min<int32_t>(kChunkRows, dstH - y0));
+                        for (int16_t row = 0; row < chunkH; ++row)
+                        {
+                            const int16_t y = static_cast<int16_t>(y0 + row);
+                            const int16_t srcX = (int16_t)(sw - 1 - y);
+                            uint16_t *dst = _rotationAnim.lineBuf + static_cast<size_t>(row) * bandH;
+                            for (int16_t i = 0; i < bandH; ++i)
+                                dst[i] = buf[(size_t)i * stride + (size_t)srcX];
+                        }
+                        _disp.display->writeRect565(xStart, y0, bandH, chunkH, _rotationAnim.lineBuf, bandH);
+                    }
+                }
+                break;
+            }
+
+            reportPlatformErrorOnce(stage);
+            pipcore::Platform *plat = platform();
+            return !plat || plat->lastError() == pipcore::PlatformError::None;
+        };
+
+        if (!adaptivePreview && !overlaysFullFrame && (curPopupVisible || hadPrevPopup || curToastVisible || hadPrevToast))
+        {
+            DirtyRect paint = {};
+            bool paintSet = false;
+            const auto expandPaint = [&](const DirtyRect &r) noexcept
+            {
+                if (rectEmpty(r))
+                    return;
+                paint = paintSet ? rectUnion(paint, r) : r;
+                paintSet = true;
+            };
+
+            for (uint8_t i = 0; i < _dirty.count; ++i)
+                expandPaint(_dirty.rects[i]);
+            if (curPopupVisible)
+                expandPaint(curPopup);
+            if (hadPrevPopup)
+                expandPaint(prevPopup);
+            if (curToastVisible)
+                expandPaint(curToast);
+            if (hadPrevToast)
+                expandPaint(prevToast);
+
+            if (paintSet)
+            {
+                tiledRenderAndPresentRect(paint.x, paint.y, paint.w, paint.h, "tiled-overlay", [&]()
+                                          {
+                                              if (_screen.current < _screen.capacity)
+                                              {
+                                                  if (currentCb)
+                                                      renderScreenToMainSprite(currentCb, _screen.current);
+                                                  else
+                                                      clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                                                  renderStatusBar();
+                                                  if (curPopupVisible)
+                                                      renderPopupMenuOverlay(now);
+                                                  if (curToastVisible)
+                                                      renderToastOverlay(now);
+                                              }
+                                              else
+                                              {
+                                                  clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                                              } });
+
+                _dirty.count = 0;
+                Debug::clearRects();
+                _popup.lastRect = curPopup;
+                _popup.lastRectValid = curPopupVisible;
+                _toast.lastRect = curToast;
+                _toast.lastRectValid = curToastVisible;
+                return;
+            }
+        }
 
         _popup.lastRect = curPopup;
         _popup.lastRectValid = curPopupVisible;
         _toast.lastRect = curToast;
         _toast.lastRectValid = curToastVisible;
 
-        if (_dirty.count > 1)
-            compactDirty(_dirty, sw, sh);
+        if (!_flags.needRedraw && _screen.current < _screen.capacity)
+            flushPendingGraphRender(_screen.current);
+        if (!_flags.needRedraw && statusBarAnimationActive())
+            updateStatusBar();
 
         const bool overlaysActive = overlaysFullFrame;
         const bool canDirtyRedraw = (_flags.needRedraw && _flags.dirtyRedrawPending && _dirty.count > 0 &&
                                      !_flags.bootActive && !_flags.errorActive && !overlaysActive);
-        const bool fullRedraw = (_flags.bootActive || _flags.errorActive || overlaysActive || (_flags.needRedraw && !canDirtyRedraw));
+        const bool rotatedPresentNeeded = tiledRotation && (_flags.needRedraw || _flags.dirtyRedrawPending || _dirty.count > 0);
+        const bool fullRedraw = (_flags.bootActive || _flags.errorActive || overlaysActive || rotatedPresentNeeded || (_flags.needRedraw && !canDirtyRedraw));
         const bool debugDirty = Debug::dirtyRectEnabled();
         const uint16_t debugCol = debugDirty ? pipcore::Sprite::swap16(Debug::dirtyRectActiveColor()) : 0;
 
@@ -316,51 +606,38 @@ namespace pipgui
             _flags.dirtyRedrawPending = 0;
             _dirty.count = 0;
             Debug::clearRects();
+            clearAdaptivePreviewShrunkStrips();
+
+            if (tiledRotation)
+            {
+                (void)presentRotatedTiledFrame("tiled-rotated-present");
+                if (adaptivePreview)
+                {
+                    _adaptivePreview.lastPresentedW = _render.screenWidth;
+                    _adaptivePreview.lastPresentedH = _render.screenHeight;
+                    _adaptivePreview.lastOutputW = (rotationDelta & 1U) ? _render.screenHeight : _render.screenWidth;
+                    _adaptivePreview.lastOutputH = (rotationDelta & 1U) ? _render.screenWidth : _render.screenHeight;
+                }
+                restoreAfterPresent(savedClip, savedClipX, savedClipY, savedClipW, savedClipH);
+                return;
+            }
 
             for (int16_t tileY = 0; tileY < sh; tileY = (int16_t)(tileY + tileH))
             {
                 const int16_t h = (int16_t)std::min<int32_t>(tileH, (int32_t)sh - tileY);
-                _render.originX = 0;
-                _render.originY = tileY;
-                _render.sprite.setClipRect(0, 0, stride, tileH);
-
-                if (_flags.bootActive)
-                {
-                    renderBootFrame(now);
-                }
-                else if (_flags.errorActive)
-                {
-                    renderErrorFrame(now);
-                }
-                else if (_screen.current < _screen.capacity)
-                {
-                    if (currentCb)
-                        renderScreenToMainSprite(currentCb, _screen.current);
-                    else
-                        renderScreenToMainSprite(nullptr, _screen.current);
-
-                    renderStatusBar();
-                    if (_flags.notifActive)
-                        renderNotificationOverlay();
-                    if (_flags.popupActive)
-                        renderPopupMenuOverlay(now);
-                    if (_flags.toastActive)
-                        renderToastOverlay(now);
-                }
-                else
-                {
-                    const bool prevRender = _flags.inSpritePass;
-                    pipcore::Sprite *prevActive = _render.activeSprite;
-                    _flags.inSpritePass = 1;
-                    _render.activeSprite = &_render.sprite;
-                    clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
-                    _render.activeSprite = prevActive;
-                    _flags.inSpritePass = prevRender;
-                }
+                renderTileBand(tileY, h);
 
                 Debug::drawOverlay(buf, stride, 0, tileY, sw, h, tileY);
                 _disp.display->writeRect565(0, tileY, sw, h, buf, stride);
                 reportPlatformErrorOnce("tiled-present");
+            }
+
+            if (adaptivePreview)
+            {
+                _adaptivePreview.lastPresentedW = _render.screenWidth;
+                _adaptivePreview.lastPresentedH = _render.screenHeight;
+                _adaptivePreview.lastOutputW = _render.screenWidth;
+                _adaptivePreview.lastOutputH = _render.screenHeight;
             }
 
             restoreAfterPresent(savedClip, savedClipX, savedClipY, savedClipW, savedClipH);
@@ -385,6 +662,8 @@ namespace pipgui
         int32_t prevClipW = 0;
         int32_t prevClipH = 0;
         _render.sprite.getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
+
+        clearAdaptivePreviewShrunkStrips();
 
         for (int16_t tileY = 0; tileY < sh; tileY = (int16_t)(tileY + tileH))
         {
@@ -489,17 +768,22 @@ namespace pipgui
 
         _dirty.count = 0;
         Debug::clearRects();
+        if (adaptivePreview)
+        {
+            _adaptivePreview.lastPresentedW = _render.screenWidth;
+            _adaptivePreview.lastPresentedH = _render.screenHeight;
+            _adaptivePreview.lastOutputW = (rotationDelta & 1U) ? _render.screenHeight : _render.screenWidth;
+            _adaptivePreview.lastOutputH = (rotationDelta & 1U) ? _render.screenWidth : _render.screenHeight;
+        }
         restoreAfterPresent(savedClip, savedClipX, savedClipY, savedClipW, savedClipH);
     }
 
     void GUI::loop()
     {
         uint32_t now = nowMs();
-        _navConsumed = false;
-        if (!_flags.tiledMode)
-            serviceAdaptivePreview(now);
+        serviceAdaptivePreview(now);
 
-        if (!_flags.tiledMode && rotationTransitionActive())
+        if (rotationTransitionActive())
         {
             renderRotationTransition(now);
             return;
@@ -578,6 +862,8 @@ namespace pipgui
                 Debug::clearRects();
             }
         };
+
+        (void)tryPromoteAutoTiledCanvas(now);
 
         if (_flags.tiledMode)
         {
@@ -885,14 +1171,12 @@ namespace pipgui
     void GUI::loopWithInput(Button &next, Button &prev)
     {
         const InputState input = pollInput(next, prev);
-        bool handled = false;
         const uint8_t manual = _manualInputMask;
 
         if (_flags.errorActive)
         {
             if (!(manual & ManualInput_Error))
                 setErrorButtonsDown(input.nextDown, input.prevDown, input.comboDown);
-            handled = true;
         }
         else if (_flags.notifActive)
         {
@@ -901,41 +1185,15 @@ namespace pipgui
                 const bool confirmDown = input.hasSelect ? (input.selectDown || input.prevDown) : input.prevDown;
                 setNotificationButtonDown(confirmDown);
             }
-            handled = true;
         }
         else if (_flags.popupActive)
         {
             if (!(manual & ManualInput_Popup))
                 handlePopupMenuInput(input);
-            handled = true;
         }
         else if (_screen.current < _screen.capacity)
         {
-            ListState *list = getList(_screen.current);
-            if (list && list->configured && list->itemCount > 0)
-            {
-                if (!(manual & ManualInput_List))
-                    handleListInput(_screen.current, input);
-                handled = true;
-            }
-            else
-            {
-                TileState *tile = getTile(_screen.current);
-                if (tile && tile->configured && tile->itemCount > 0)
-                {
-                    if (!(manual & ManualInput_Tile))
-                        handleTileInput(_screen.current, input);
-                    handled = true;
-                }
-            }
-        }
-
-        if (!handled && !_flags.screenTransition && !_navConsumed)
-        {
-            if (input.nextPressed)
-                nextScreen();
-            if (input.prevPressed)
-                prevScreen();
+            (void)dispatchNavInput(_screen.current, input);
         }
 
         loop();
@@ -944,14 +1202,12 @@ namespace pipgui
     void GUI::loopWithInput(Button &next, Button &prev, Button &select)
     {
         const InputState input = pollInput(next, prev, select);
-        bool handled = false;
         const uint8_t manual = _manualInputMask;
 
         if (_flags.errorActive)
         {
             if (!(manual & ManualInput_Error))
                 setErrorButtonsDown(input.nextDown, input.prevDown, input.comboDown);
-            handled = true;
         }
         else if (_flags.notifActive)
         {
@@ -960,41 +1216,15 @@ namespace pipgui
                 const bool confirmDown = input.hasSelect ? (input.selectDown || input.prevDown) : input.prevDown;
                 setNotificationButtonDown(confirmDown);
             }
-            handled = true;
         }
         else if (_flags.popupActive)
         {
             if (!(manual & ManualInput_Popup))
                 handlePopupMenuInput(input);
-            handled = true;
         }
         else if (_screen.current < _screen.capacity)
         {
-            ListState *list = getList(_screen.current);
-            if (list && list->configured && list->itemCount > 0)
-            {
-                if (!(manual & ManualInput_List))
-                    handleListInput(_screen.current, input);
-                handled = true;
-            }
-            else
-            {
-                TileState *tile = getTile(_screen.current);
-                if (tile && tile->configured && tile->itemCount > 0)
-                {
-                    if (!(manual & ManualInput_Tile))
-                        handleTileInput(_screen.current, input);
-                    handled = true;
-                }
-            }
-        }
-
-        if (!handled && !_flags.screenTransition && !_navConsumed)
-        {
-            if (input.nextPressed)
-                nextScreen();
-            if (input.prevPressed)
-                prevScreen();
+            (void)dispatchNavInput(_screen.current, input);
         }
 
         loop();
@@ -1003,14 +1233,12 @@ namespace pipgui
     void GUI::loopWithPolledInput()
     {
         const InputState input = _input;
-        bool handled = false;
         const uint8_t manual = _manualInputMask;
 
         if (_flags.errorActive)
         {
             if (!(manual & ManualInput_Error))
                 setErrorButtonsDown(input.nextDown, input.prevDown, input.comboDown);
-            handled = true;
         }
         else if (_flags.notifActive)
         {
@@ -1019,41 +1247,15 @@ namespace pipgui
                 const bool confirmDown = input.hasSelect ? (input.selectDown || input.prevDown) : input.prevDown;
                 setNotificationButtonDown(confirmDown);
             }
-            handled = true;
         }
         else if (_flags.popupActive)
         {
             if (!(manual & ManualInput_Popup))
                 handlePopupMenuInput(input);
-            handled = true;
         }
         else if (_screen.current < _screen.capacity)
         {
-            ListState *list = getList(_screen.current);
-            if (list && list->configured && list->itemCount > 0)
-            {
-                if (!(manual & ManualInput_List))
-                    handleListInput(_screen.current, input);
-                handled = true;
-            }
-            else
-            {
-                TileState *tile = getTile(_screen.current);
-                if (tile && tile->configured && tile->itemCount > 0)
-                {
-                    if (!(manual & ManualInput_Tile))
-                        handleTileInput(_screen.current, input);
-                    handled = true;
-                }
-            }
-        }
-
-        if (!handled && !_flags.screenTransition && !_navConsumed)
-        {
-            if (input.nextPressed)
-                nextScreen();
-            if (input.prevPressed)
-                prevScreen();
+            (void)dispatchNavInput(_screen.current, input);
         }
 
         loop();

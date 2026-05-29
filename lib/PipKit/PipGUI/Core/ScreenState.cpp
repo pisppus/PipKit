@@ -64,7 +64,8 @@ namespace pipgui
         GraphArea **newGraphs = (GraphArea **)detail::alloc(plat, sizeof(GraphArea *) * newCap, pipcore::AllocCaps::Default);
         ListState **newLists = (ListState **)detail::alloc(plat, sizeof(ListState *) * newCap, pipcore::AllocCaps::Default);
         TileState **newTiles = (TileState **)detail::alloc(plat, sizeof(TileState *) * newCap, pipcore::AllocCaps::Default);
-        if (!newScreens || !newGraphs || !newLists || !newTiles)
+        detail::NavBindingState *newNavBindings = (detail::NavBindingState *)detail::alloc(plat, sizeof(detail::NavBindingState) * newCap, pipcore::AllocCaps::Default);
+        if (!newScreens || !newGraphs || !newLists || !newTiles || !newNavBindings)
         {
             if (newScreens)
                 detail::free(plat, newScreens);
@@ -74,12 +75,15 @@ namespace pipgui
                 detail::free(plat, newLists);
             if (newTiles)
                 detail::free(plat, newTiles);
+            if (newNavBindings)
+                detail::free(plat, newNavBindings);
             return;
         }
         std::fill_n(newScreens, newCap, nullptr);
         std::fill_n(newGraphs, newCap, nullptr);
         std::fill_n(newLists, newCap, nullptr);
         std::fill_n(newTiles, newCap, nullptr);
+        std::fill_n(newNavBindings, newCap, detail::NavBindingState{});
         const uint16_t oldCap = _screen.capacity;
         if (oldCap)
         {
@@ -91,6 +95,8 @@ namespace pipgui
                 std::copy_n(_screen.lists, oldCap, newLists);
             if (_screen.tiles)
                 std::copy_n(_screen.tiles, oldCap, newTiles);
+            if (_screen.navBindings)
+                std::copy_n(_screen.navBindings, oldCap, newNavBindings);
         }
         if (_screen.callbacks)
             detail::free(plat, _screen.callbacks);
@@ -100,10 +106,13 @@ namespace pipgui
             detail::free(plat, _screen.lists);
         if (_screen.tiles)
             detail::free(plat, _screen.tiles);
+        if (_screen.navBindings)
+            detail::free(plat, _screen.navBindings);
         _screen.callbacks = newScreens;
         _screen.graphAreas = newGraphs;
         _screen.lists = newLists;
         _screen.tiles = newTiles;
+        _screen.navBindings = newNavBindings;
         _screen.capacity = newCap;
     }
 

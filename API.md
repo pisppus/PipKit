@@ -246,13 +246,15 @@ ui.begin(0);        // rotation: 0..3
  
 - `rotation` принимает значения `0..3`.
 - `forceTiles=true` включает tiled-mode даже если хватает памяти на полный screen-buffer.
-- если полный screen-buffer выделить не получилось, библиотека автоматически включает tiled-mode: выделяет буфер `screenWidth × ceil(screenHeight/2)` и рисует кадр в 2 прохода (верх/низ).
+- если памяти не хватает для full canvas, библиотека автоматически уходит в tiled-mode.
+- при внутреннем GUI OOM библиотека сначала освобождает временные буферы и кэши, повторяет выделение и, если full canvas удержать всё равно нельзя, бесшовно деградирует в tiled-mode.
+- auto-tiled режим не является постоянным: когда runtime снова может выделить full canvas в спокойном кадре, он возвращает fullscreen rendering. `forceTiles=true` остаётся принудительным tiled-mode и обратно не повышается.
 - стартовый фон GUI фиксированно чёрный (`0x0000`).
 
 Ограничения tiled-mode:
 
 - screen-transition анимации отключены (требуют полного screen-buffer).
-- rotation-transition анимация отключена.
+- dirty-redraw для повёрнутого tiled-frame сейчас не делается: при изменениях rotated tiled-screen перерисовывается целиком, но только по реальному запросу redraw, а не постоянно каждый тик.
 
 Проверить текущий режим можно через `ui.tiledMode()`.
 
@@ -268,8 +270,6 @@ ui.rotationTransitionActive();    // идёт ли сейчас анимация
 
 - `setRotation(...)` меняет ориентацию уже после `begin()`, без повторного `configDisplay()`
 - библиотека держит физическую конфигурацию дисплея как есть и поворачивает GUI логически, пересобирая внутренний sprite под новый размер
-- если GUI сейчас в обычном steady-state, поворот идёт с анимацией как у телефона: текущий кадр схлопывается, в середине меняется ориентация, затем новый кадр раскрывается
-- если в этот момент активны boot, error, screen transition или overlay-состояния, библиотека делает безопасный мгновенный поворот без анимации
 - `screenRotation()` возвращает текущий runtime rotation `0..3`
 - `rotationTransitionActive()` позволяет не запускать свой второй переход поверх уже идущего переворота
 
@@ -461,14 +461,17 @@ ui.clearAdaptivePreview();
 
 # 6. Layout helpers
 
-Это лёгкие helper-ы для раскладки UI без тяжёлой layout-системы.
+Это layout-слой самого PipGUI: им удобно создавать контейнеры, делать gap и раскладывать компоненты без ручного сдвига каждого элемента.
 
 Базовые типы:
 
 ```cpp
 UiSize   size{120, 40};
+UiPoint  point{12, -8};
 UiRect   rect{0, 0, 240, 320};
 UiInsets insets{10, 10, 10, 10};
+UiGap    gap{12, 8};
+UiBox    box{ui.screenRect()};
 ```
 
 ## 6.1. Slicing API
@@ -480,6 +483,36 @@ UiRect work = inset(root, 10);
 UiRect header = takeTop(work, 24, 8);
 UiRect footer = takeBottom(work, 28, 8);
 UiRect content = work;
+```
+
+`UiRect`, `UiFlowRow`, `UiFlowColumn` и `UiBox` это часть layout API PipGUI, а не просто внутренние структуры.
+
+Если нужен именно контейнерный fluent-стиль, контейнер создаётся через `ui.box()` или `ui.box(rect)`:
+
+```cpp
+UiBox page = ui.box().inset(10);
+UiRect header = page.top(24, 8);
+UiRect body = page.rest();
+
+UiBox panel = ui.box(ui.area(20, 60, 200, 120)).inset(8);
+UiRect title = panel.top(20, 6);
+UiRect content = panel.rest();
+```
+
+Как это читать:
+
+- `ui.box()` создаёт контейнер по всему экрану
+- `ui.box(rect)` создаёт контейнер внутри уже готовой области
+- `inset(...)` сужает контейнер изнутри
+- `top / bottom / left / right / rest` режут контейнер на части и возвращают `UiRect`
+- полученные `UiRect` потом передаются в `.in(rect)` у компонентов
+
+Если нужен прямой low-level доступ, `ui.screenRect()` возвращает текущую экранную область как `UiRect`:
+
+```cpp
+UiRect page = inset(ui.screenRect(), 10);
+UiRect header = takeTop(page, 24, 8);
+UiRect body = page;
 ```
 
 Доступно:
@@ -511,6 +544,27 @@ flowColumn(area, sizes, out, 3, 8, Center, Center);
 - `End`
 - `layout::SpaceBetween`
 - `layout::SpaceEvenly`
+
+Любой `UiRect` можно использовать как лёгкий контейнер: у `drawText()`, `drawRect()`, `drawCircle()`, `drawEllipse()`, `drawArc()`, `drawTriangle()`, `drawLine()` и `drawSquircleRect()` есть `.in(rect)`, после чего `pos(...)` и локальные координаты считаются уже внутри этой области.
+
+В `pos(...)` для координаты `center` можно быстро поставить объект по центру соответствующей оси. Остальные значения остаются обычными координатами.
+
+Практический паттерн:
+
+```cpp
+UiBox page = ui.box().inset(10);
+UiRect row = page.top(40, 8);
+
+UiFlowRow<3> flow(row, 10, Start, Center);
+UiRect &a = flow.next(40, 20);
+UiRect &b = flow.next(60, 20);
+UiRect &c = flow.next(40, 20);
+flow.finish();
+
+ui.drawRect().in(a).size(40, 20).fill(ui.rgb(0, 120, 255));
+ui.drawText().in(b).pos(center, center).text("Hello").align(Center);
+ui.drawTriangle().in(c).pos(center, center).size(20, 14).direction(Up);
+```
 
 ## 6.3. Cursor-based API
 
@@ -595,13 +649,13 @@ ui.setTextStyle(H1);
 
 ```cpp
 ui.drawText()
-    .pos(center, 32)                   // точка привязки текста
+    .pos(center, 32)                   // `center` работает и по X, и по Y
     .font(WixMadeForDisplay, 18)       // конкретный шрифт, размер и насыщенность
     .weight(Semibold)                  // вес текста
     .text("Hello")                     // сама строка
     .color(ui.rgb(255, 255, 255))      // цвет текста
     .bgColor(ui.rgb(0, 0, 0))          // фон под текстом
-    .align(Center);                    // выравнивание относительно точки `pos(...)`
+    .align(Center);                    // горизонтальный якорь текста
 ```
 
 `drawText()` рисует строку сразу в текущий кадр.
@@ -618,8 +672,32 @@ ui.updateText()
 
 - `drawText()` рисует текст как есть
 - `updateText()` сначала очищает прошлую область и потом рисует новое значение на том же месте
+- `align(...)` отвечает только за горизонтальный якорь строки, когда `x` задан числом
+- `in(rect)` делает `rect` локальным контейнером для текста
+- `pos(center, center)` центрирует строку как объект по обеим осям
 
-## 7.4. Бегущая строка и многоточие
+## 7.4. Текстовый блок с переносом слов
+
+```cpp
+ui.drawTextBox()
+    .pos(24, 128)                               // левый верхний угол области
+    .size(192, 84)                              // ширина и высота области
+    .text("This box wraps words automatically and clips everything outside.")
+    .color(ui.rgb(220, 240, 240))
+    .bgColor(ui.rgb(0, 46, 46))
+    .align(Left);                               // выравнивание каждой строки внутри области
+```
+
+`drawTextBox()`:
+
+- переносит слова автоматически по ширине области
+- рисует текст только внутри заданного прямоугольника
+- поддерживает `.in(rect)`, если область уже получена из layout
+- по умолчанию сам ставит нормальный межстрочный интервал
+- если нужен свой интервал, его можно переопределить через `.lineGap(...)`
+- `.align(Left / Center / Right)` задаёт выравнивание строк внутри области
+
+## 7.5. Бегущая строка и многоточие
 
 ```cpp
 ui.drawTextMarquee()
@@ -649,7 +727,7 @@ ui.drawTextEllipsized()
 
 `drawTextEllipsized()` обрезает строку по `width(...)` и добавляет многоточие
 
-## 7.5. Иконки
+## 7.6. Иконки
 
 ### Обычные иконки берутся из набора `IconId`
 
@@ -742,15 +820,6 @@ ui.updateAnimIcon()
 
 # 8. Фигуры
 
-```cpp
-ui.drawRect()
-    .pos(20, 40)
-    .size(100, 40)
-    .radius(10)
-    .fill(ui.rgb(0, 120, 255))
-    .border(1, ui.rgb(255, 255, 255));
-```
-
 Что важно:
 
 - `fill(color565)` — задаёт заливку; если не вызывать, фигура остаётся без заливки
@@ -804,12 +873,37 @@ ui.drawEllipse()
 
 ```cpp
 ui.drawTriangle()
-    .point0(40, 120)                      // первая вершина
-    .point1(70, 80)                       // вторая вершина
-    .point2(100, 120)                     // третья вершина
-    // .radius(8)                         // опционально: скругление углов
-    .fill(ui.rgb(0, 200, 120))            // цвет заливки
-    .border(1, ui.rgb(255, 255, 255))     // толщина и цвет контура
+    .pos(70, 100)                          // позиция фигуры
+    .size(60, 40)                          // готовый isosceles preset
+    .direction(Up)                         // Up / Right / Down / Left
+    .radius(8)                             // опционально: скругление углов
+    .fill(ui.rgb(0, 200, 120))             // цвет заливки
+    .border(1, ui.rgb(255, 255, 255))      // толщина и цвет контура
+```
+
+Для произвольной формы точки задаются локально, а `pos(...)` только переносит готовую фигуру:
+
+```cpp
+ui.drawTriangle()
+    .pos(140, 140)
+    .vertices(-30, 12, 30, 12, 0, -26)
+    .fill(ui.rgb(255, 128, 0))
+    .border(1, ui.rgb(255, 255, 255))
+```
+
+Что значат числа в `.vertices(...)`:
+
+- формат: `.vertices(x0, y0, x1, y1, x2, y2)`
+- это 3 локальные вершины относительно `pos(...)`
+- `0, 0` это локальный origin фигуры
+- отрицательные значения уходят влево/вверх, положительные вправо/вниз
+
+Пример:
+
+```cpp
+ui.drawTriangle()
+    .pos(140, 140)
+    .vertices(-30, 12, 30, 12, 0, -26);   // основание внизу, вершина сверху
 ```
 
 ## 8.6 Дуга
@@ -1058,12 +1152,30 @@ void loop()
 }
 ```
 
-`loopWithInput(...)` обновляет объекты `Button`, обрабатывает ввод для built-in overlay/меню (list/tile/popup/error/notification) и затем вызывает `ui.loop()`.
-Если вам нужен свой state-machine ввода, используйте `pollInput(...)` и/или передавайте состояния кнопок вручную через `...Input()` fluent-методы.
+`loopWithInput(...)` обновляет объекты `Button`, собирает `InputState`, диспатчит события в built-in overlay/navigation handlers и затем вызывает `ui.loop()`.
+`loopWithPolledInput()` делает то же самое, но использует последний `pollInput(...)`.
 
-По умолчанию `loopWithInput(...)` включает авто-переходы между экранами по коротким нажатиям `Next/Prev` (когда не активны overlay/меню).
-`loopWithPolledInput()` обрабатывает built-in overlay/меню на основании последнего `pollInput(...)` и так же включает авто-переходы между экранами по коротким нажатиям `Next/Prev` (как `loopWithInput(...)`).
-Чтобы отключить авто-навигацию на текущем тике (если вы используете кнопки под свой сценарий), вызовите `ui.consumeAutoNav()` до `loopWithPolledInput()`.
+Экран сам явно выбирает, как трактовать кнопки:
+
+```cpp
+(void)ui.listNav();            // привязать built-in list-controller к текущему экрану
+(void)ui.tileNav();            // привязать built-in tile-controller к текущему экрану
+ui.nav().handler(myHandler);   // привязать свой event-handler
+ui.nav().clear();              // снять handler с текущего экрана
+```
+
+Сигнатура custom handler:
+
+```cpp
+bool myHandler(GUI &ui, const NavEvent &event, void *userData)
+{
+    return false;
+}
+```
+
+- вернуть `true` значит "событие обработано"
+- вернуть `false` значит "этот handler событие не использовал"
+- `userData` передаётся через `ui.nav().handler(myHandler, userData)`
 
 Если `loopWithInput(...)` не используется, вызывайте `btn.update()` сами в начале каждого `loop()`.
 После этого `wasPressed()` и `isDown()` читают уже обновлённое состояние кнопки.
@@ -1098,32 +1210,50 @@ InputState input = ui.pollInput(Next, Prev, Select);
 - `Down` - состояние удержания
 - `Pressed` - одноразовое событие нажатия
 
-### 10.2.1. Где библиотека использует кнопки (шорткаты и встроенные сценарии)
+### 10.2.1. NavEvent и готовые handlers
 
-Если вы используете `loopWithInput(...)` или вручную прокидываете `...Input()` fluent-методы, то кнопки обрабатываются в этих местах:
-
-- **Скриншоты (built-in shortcut):** удержание `Next + Prev` (если включены screenshots) — захват скриншота.
-- **List menu (`updateList`):**
-  - `Next/Prev` коротко — перемещение по пунктам.
-  - **2-button режим:** удержание `Next` — открыть `targetScreen`.
-  - **3-button режим:** короткое нажатие `Select` — открыть `targetScreen`.
-  - удержание `Prev` — `backScreen()` (назад по history).
-- **Tile menu (`updateTile`):** то же самое, что и list (перемещение `Next/Prev`, открыть `Next-hold` или `Select-press`, назад `Prev-hold`).
-- **Popup menu:** `Next/Prev` — перемещение; **2-button:** `Next-hold` подтверждает; **3-button:** `Select-press` подтверждает; `Prev-hold` закрывает.
-- **Notification overlay:** закрывается через встроенную обработку ввода:
-  - **2-button режим:** `Prev` подтверждает/закрывает.
-  - **3-button режим:** `Select` подтверждает/закрывает (и `Prev` тоже принимается для совместимости).
-- **Error overlay:** `Next/Prev` переключают ошибки; комбинация (`comboDown`) используется для подтверждения/закрытия (зависит от типа ошибки).
-- **Slider:** `Next/Prev` двигают значение (берётся из последнего `pollInput(...)`).
-- **Graph pause (только 3-button режим):** `Select` на экранах с графиком переключает паузу (см. раздел 14.4).
-- **Auto screen-nav:** при использовании `loopWithInput(...)` короткие `Next/Prev` переключают экраны через `nextScreen()/prevScreen()` когда не активны overlay/меню.
-
-Если вы используете `Next/Prev` под кастомную логику на каком-то экране (и не хотите авто-переключения экранов),
-после своей обработки вызовите:
+`NavEvent` содержит уже нормализованное событие навигации:
 
 ```cpp
-ui.consumeAutoNav();
+event.screenId;     // экран, для которого идёт dispatch
+event.button;       // Next / Prev / Select / Combo
+event.code;         // Pressed / LongPressed / Repeat / Released
+event.nowMs;        // timestamp события
+event.heldMs;       // сколько удерживалась кнопка
+event.longPress;    // был ли уже long-press для этого release
+event.nextDown;
+event.prevDown;
+event.selectDown;
+event.comboDown;
+event.hasSelect;
 ```
+
+Коды событий:
+
+- `Pressed` - первое нажатие кнопки
+- `LongPressed` - момент, когда удержание перешло порог long-press
+- `Repeat` - повторные тики после long-press
+- `Released` - отпускание кнопки
+
+Встроенные handlers:
+
+- `ui.listNav()`:
+  - `Next Released` - следующий пункт
+  - `Prev Released` - предыдущий пункт
+  - `Prev LongPressed` - `backScreen()`
+  - `Select Released` в 3-button режиме - открыть `targetScreen`
+  - `Next LongPressed` в 2-button режиме - открыть `targetScreen`
+  - `Combo Released` - открыть `targetScreen`
+- `ui.tileNav()`:
+  - та же семантика, что и у `listNav()`, но для tile-menu
+
+Что библиотека продолжает обрабатывать вне screen-nav handler:
+
+- **Скриншоты (built-in shortcut):** удержание `Next + Prev` при включённых screenshots
+- **Popup menu:** использует свой built-in handler поверх того же input pipeline
+- **Notification overlay:** использует свой built-in handler
+- **Error overlay:** использует свой built-in handler
+- **Slider / graph-specific helpers:** читают последний `InputState`, если сам виджет это делает
 
 ## 11.3. Управление экранами
 
@@ -2031,7 +2161,7 @@ python tools/ota/verify.py
 #define PIPGUI_OTA_ED25519_PUBKEY_HEX "..."
 
 #define PIPGUI_FIRMWARE_TITLE "PipKit"
-#define PIPGUI_FIRMWARE_VERSION "1.6.1"
+#define PIPGUI_FIRMWARE_VERSION "1.6.2"
 ```
 
 Что это значит:
@@ -2094,7 +2224,7 @@ bool ready = ui.otaStableListReady();         // список уже загру�
 uint8_t count = ui.otaStableListCount();      // сколько stable-версий доступно
 const char* ver = ui.otaStableListVersion(i); // строка версии по индексу
 
-ui.otaRequestInstallStableVersion("1.6.1");
+ui.otaRequestInstallStableVersion("1.6.2");
 ```
 
 Это нужно только если хочешь показывать пользователю список старых stable-сборок и давать выбрать rollback вручную.

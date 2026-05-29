@@ -114,6 +114,8 @@ namespace pipgui::detail
         uint32_t startMs = 0;
         uint16_t lastPresentedW = 0;
         uint16_t lastPresentedH = 0;
+        uint16_t lastOutputW = 0;
+        uint16_t lastOutputH = 0;
         uint16_t *lineBuf = nullptr;
         uint16_t lineBufCap = 0;
     };
@@ -122,16 +124,15 @@ namespace pipgui::detail
     {
         bool active = false;
         bool switched = false;
+        bool startedTiled = false;
+        bool startedAutoTiled = false;
+        bool streamingFrame = false;
         uint8_t from = 0;
         uint8_t to = 0;
         uint32_t startMs = 0;
         uint32_t durationMs = 420;
-        uint16_t *snapshot = nullptr;
-        uint16_t snapshotW = 0;
-        uint16_t snapshotH = 0;
-        uint16_t snapshotStride = 0;
         uint16_t *lineBuf = nullptr;
-        uint16_t lineBufCap = 0;
+        uint32_t lineBufCap = 0;
     };
 
     struct ClipState
@@ -159,6 +160,49 @@ namespace pipgui::detail
         uint8_t count = 0;
     };
 
+    inline constexpr uint8_t MARQUEE_PHASE_CACHE_MAX = 8;
+
+    struct MarqueePhaseCacheEntry
+    {
+        bool valid = false;
+        uint32_t key = 0;
+        uint32_t phaseStartMs = 0;
+        uint32_t lastNowMs = 0;
+        uint32_t lastUseMs = 0;
+        uint32_t offsetMilliPx = 0;
+        uint32_t holdEndMs = 0;
+        uint32_t loopMilliPx = 0;
+        bool holdDone = false;
+    };
+
+    struct MarqueePhaseCacheState
+    {
+        MarqueePhaseCacheEntry entries[MARQUEE_PHASE_CACHE_MAX] = {};
+    };
+
+    struct NavBindingState
+    {
+        NavHandler handler = nullptr;
+        void *userData = nullptr;
+    };
+
+    struct NavButtonDispatchState
+    {
+        bool blocked = false;
+        bool down = false;
+        bool longFired = false;
+        uint32_t pressedMs = 0;
+        uint32_t repeatMs = 0;
+    };
+
+    struct NavDispatchState
+    {
+        NavButtonDispatchState next = {};
+        NavButtonDispatchState prev = {};
+        NavButtonDispatchState select = {};
+        NavButtonDispatchState combo = {};
+    };
+
     struct ScreenState
     {
         static constexpr uint8_t HISTORY_MAX = 16;
@@ -166,6 +210,7 @@ namespace pipgui::detail
         GraphArea **graphAreas = nullptr;
         ListState **lists = nullptr;
         TileState **tiles = nullptr;
+        NavBindingState *navBindings = nullptr;
         uint16_t capacity = 0;
         uint8_t current = INVALID_SCREEN_ID;
         uint8_t history[HISTORY_MAX] = {};
@@ -277,6 +322,13 @@ namespace pipgui::detail
         int16_t resultIndex = -1;
         bool resultReady = false;
         bool inputArmed = false;
+        uint32_t nextHoldStartMs = 0;
+        uint32_t prevHoldStartMs = 0;
+        bool nextLongFired = false;
+        bool prevLongFired = false;
+        bool lastNextDown = false;
+        bool lastPrevDown = false;
+        bool lastSelectDown = false;
         DirtyRect lastRect = {};
         bool lastRectValid = false;
     };
@@ -333,27 +385,22 @@ namespace pipgui::detail
     {
         uint16_t *smallIn = nullptr;
         uint16_t *smallTmp = nullptr;
-        uint32_t *rowR = nullptr;
-        uint32_t *rowG = nullptr;
-        uint32_t *rowB = nullptr;
-        uint32_t *colR = nullptr;
-        uint32_t *colG = nullptr;
-        uint32_t *colB = nullptr;
         uint8_t *lookup = nullptr;
         uint32_t workLen = 0;
-        uint16_t rowCap = 0;
-        uint16_t colCap = 0;
         uint16_t lookupSw = 0;
         uint16_t lookupSh = 0;
         uint16_t lookupW = 0;
         uint16_t lookupH = 0;
+        uint16_t lookupRadius = 0;
         uint32_t lastUseMs = 0;
+        pipcore::Sprite captureSprite;
     };
 
     struct Flags
     {
         unsigned spriteEnabled : 1;
         unsigned tiledMode : 1;
+        unsigned autoTiledMode : 1;
         unsigned inSpritePass : 1;
         unsigned needRedraw : 1;
         unsigned dirtyRedrawPending : 1;
@@ -375,6 +422,7 @@ namespace pipgui::detail
         unsigned toastActive : 1;
         unsigned popupActive : 1;
         unsigned popupClosing : 1;
+        unsigned blurCapturePass : 1;
     };
 
     struct DiagnosticsState
@@ -384,6 +432,7 @@ namespace pipgui::detail
         bool otaAutoConfirmed = false;
         uint32_t screenshotHoldStartMs = 0;
         bool screenshotCaptured = false;
+        uint32_t lastTiledPromoteTryMs = 0;
     };
 
     struct ButtonCacheEntry

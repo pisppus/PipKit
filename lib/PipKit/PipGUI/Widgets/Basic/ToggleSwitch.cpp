@@ -8,7 +8,6 @@ namespace pipgui
     {
         constexpr uint16_t kToggleAnimMs = 200;
         constexpr uint16_t kToggleEnabledAnimMs = 150;
-        constexpr int16_t kToggleUpdatePad = 3;
 
         [[nodiscard]] inline uint8_t toggleTarget(bool value) noexcept
         {
@@ -259,17 +258,13 @@ namespace pipgui
 
         if (_flags.tiledMode && !_flags.inSpritePass)
         {
-            tiledRenderAndPresentRect((int16_t)(rx - kToggleUpdatePad),
-                                      (int16_t)(ry - kToggleUpdatePad),
-                                      (int16_t)(w + kToggleUpdatePad * 2),
-                                      (int16_t)(h + kToggleUpdatePad * 2),
+            tiledRenderAndPresentRect(rx,
+                                      ry,
+                                      w,
+                                      h,
                                       "tiled-update-toggle",
                                       [&]()
                                       {
-                                          drawRect()
-                                              .pos((int16_t)(rx - kToggleUpdatePad), (int16_t)(ry - kToggleUpdatePad))
-                                              .size((int16_t)(w + kToggleUpdatePad * 2), (int16_t)(h + kToggleUpdatePad * 2))
-                                              .fill(_render.bgColor565);
                                           drawToggleSwitch(x, y, w, h, state, activeColor, inactiveColor, knobColor);
                                       });
             return;
@@ -281,10 +276,6 @@ namespace pipgui
         _flags.inSpritePass = 1;
         _render.activeSprite = &_render.sprite;
 
-        drawRect()
-            .pos((int16_t)(rx - kToggleUpdatePad), (int16_t)(ry - kToggleUpdatePad))
-            .size((int16_t)(w + kToggleUpdatePad * 2), (int16_t)(h + kToggleUpdatePad * 2))
-            .fill(_render.bgColor565);
         drawToggleSwitch(x, y, w, h, state, activeColor, inactiveColor, knobColor);
 
         _flags.inSpritePass = prevRender;
@@ -292,10 +283,7 @@ namespace pipgui
 
         if (!prevRender)
         {
-            invalidateRect((int16_t)(rx - kToggleUpdatePad),
-                           (int16_t)(ry - kToggleUpdatePad),
-                           (int16_t)(w + kToggleUpdatePad * 2),
-                           (int16_t)(h + kToggleUpdatePad * 2));
+            invalidateRect(rx, ry, w, h);
         }
     }
 }

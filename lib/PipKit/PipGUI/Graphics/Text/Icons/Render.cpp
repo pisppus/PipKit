@@ -113,7 +113,7 @@ namespace pipgui
                 const int32_t a11 = (int32_t)plat->readProgmemByte(row1 + x1);
                 const int32_t a0 = (a00 << 16) + (a10 - a00) * (int32_t)fx;
                 const int32_t a1 = (a01 << 16) + (a11 - a01) * (int32_t)fx;
-                int32_t alpha = ((a0 + static_cast<int32_t>(((a1 - a0) * static_cast<int32_t>(fy)) >> 16)) + 0x8000) >> 16;
+                int32_t alpha = ((a0 + static_cast<int32_t>(((int64_t)(a1 - a0) * fy) >> 16)) + 0x8000) >> 16;
                 if (alpha < 0)
                     alpha = 0;
                 else if (alpha > 255)

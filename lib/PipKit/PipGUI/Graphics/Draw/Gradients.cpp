@@ -48,7 +48,6 @@ namespace pipgui
             x = AutoX(w);
         if (y == -1)
             y = AutoY(h);
-
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
@@ -107,7 +106,6 @@ namespace pipgui
             x = AutoX(w);
         if (y == -1)
             y = AutoY(h);
-
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
@@ -165,7 +163,6 @@ namespace pipgui
             x = AutoX(w);
         if (y == -1)
             y = AutoY(h);
-
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
@@ -241,7 +238,6 @@ namespace pipgui
             x = AutoX(w);
         if (y == -1)
             y = AutoY(h);
-
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 
@@ -300,7 +296,6 @@ namespace pipgui
             x = AutoX(w);
         if (y == -1)
             y = AutoY(h);
-
         if (w <= 0 || h <= 0 || !_flags.spriteEnabled)
             return;
 

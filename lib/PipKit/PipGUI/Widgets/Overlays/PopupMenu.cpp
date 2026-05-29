@@ -134,23 +134,24 @@ namespace pipgui
             return true;
         }
 
-        void resetPopupListRuntime(ListState &list)
+        void resetPopupListRuntime(detail::PopupMenuState &popup)
         {
+            ListState &list = popup.list;
             list.selectedIndex = 0;
             list.scrollPos = 0.0f;
             list.targetScroll = 0.0f;
             list.scrollVel = 0.0f;
-            list.nextHoldStartMs = 0;
-            list.prevHoldStartMs = 0;
-            list.nextLongFired = false;
-            list.prevLongFired = false;
-            list.lastNextDown = false;
-            list.lastPrevDown = false;
-            list.lastSelectDown = false;
             list.scrollbarAlpha = 0;
             list.lastScrollActivityMs = 0;
             list.marqueeStartMs = 0;
             list.lastUpdateMs = 0;
+            popup.nextHoldStartMs = 0;
+            popup.prevHoldStartMs = 0;
+            popup.nextLongFired = false;
+            popup.prevLongFired = false;
+            popup.lastNextDown = false;
+            popup.lastPrevDown = false;
+            popup.lastSelectDown = false;
         }
 
         void freePopupItems(ListState &list, pipcore::Platform *plat)
@@ -259,7 +260,7 @@ namespace pipgui
             return;
         }
 
-        resetPopupListRuntime(list);
+        resetPopupListRuntime(_popup);
         list.configured = true;
         list.checkedIndex = 0xFF;
         list.checkedIconId = IconCheckmark;
@@ -303,21 +304,21 @@ namespace pipgui
         if (!_popup.inputArmed)
         {
             const uint32_t readyAfter = _popup.animDurationMs ? _popup.animDurationMs : 1;
-            list.lastNextDown = nextDown;
-            list.lastPrevDown = prevDown;
-            list.lastSelectDown = selectDown;
+            _popup.lastNextDown = nextDown;
+            _popup.lastPrevDown = prevDown;
+            _popup.lastSelectDown = selectDown;
             if ((now - _popup.startMs) < readyAfter || nextDown || prevDown || selectDown)
                 return;
             _popup.inputArmed = true;
-            list.lastNextDown = false;
-            list.lastPrevDown = false;
-            list.lastSelectDown = false;
+            _popup.lastNextDown = false;
+            _popup.lastPrevDown = false;
+            _popup.lastSelectDown = false;
             return;
         }
 
         bool changed = false;
         const uint32_t holdMs = 400;
-        const bool selectPressed = input.hasSelect && selectDown && !list.lastSelectDown;
+        const bool selectPressed = input.hasSelect && selectDown && !_popup.lastSelectDown;
 
         if (selectPressed)
         {
@@ -330,18 +331,18 @@ namespace pipgui
             _flags.popupClosing = 1;
             _popup.startMs = now;
             requestRedraw();
-            list.lastSelectDown = selectDown;
+            _popup.lastSelectDown = selectDown;
             return;
         }
 
         if (nextDown)
         {
-            if (!list.lastNextDown)
+            if (!_popup.lastNextDown)
             {
-                list.nextHoldStartMs = now;
-                list.nextLongFired = false;
+                _popup.nextHoldStartMs = now;
+                _popup.nextLongFired = false;
             }
-            else if (!input.hasSelect && !list.nextLongFired && list.nextHoldStartMs && (now - list.nextHoldStartMs) >= holdMs)
+            else if (!input.hasSelect && !_popup.nextLongFired && _popup.nextHoldStartMs && (now - _popup.nextHoldStartMs) >= holdMs)
             {
                 _popup.rememberedItems = _popup.items;
                 _popup.rememberedCount = list.itemCount;
@@ -351,14 +352,14 @@ namespace pipgui
                 _popup.resultReady = true;
                 _flags.popupClosing = 1;
                 _popup.startMs = now;
-                list.nextLongFired = true;
+                _popup.nextLongFired = true;
                 requestRedraw();
                 return;
             }
         }
         else
         {
-            if (list.lastNextDown && !list.nextLongFired)
+            if (_popup.lastNextDown && !_popup.nextLongFired)
             {
                 if (list.selectedIndex + 1 < list.itemCount)
                     list.selectedIndex++;
@@ -366,29 +367,29 @@ namespace pipgui
                     list.selectedIndex = 0;
                 changed = true;
             }
-            list.nextHoldStartMs = 0;
-            list.nextLongFired = false;
+            _popup.nextHoldStartMs = 0;
+            _popup.nextLongFired = false;
         }
 
         if (prevDown)
         {
-            if (!list.lastPrevDown)
+            if (!_popup.lastPrevDown)
             {
-                list.prevHoldStartMs = now;
-                list.prevLongFired = false;
+                _popup.prevHoldStartMs = now;
+                _popup.prevLongFired = false;
             }
-            else if (!list.prevLongFired && list.prevHoldStartMs && (now - list.prevHoldStartMs) >= holdMs)
+            else if (!_popup.prevLongFired && _popup.prevHoldStartMs && (now - _popup.prevHoldStartMs) >= holdMs)
             {
                 _flags.popupClosing = 1;
                 _popup.startMs = now;
-                list.prevLongFired = true;
+                _popup.prevLongFired = true;
                 requestRedraw();
                 return;
             }
         }
         else
         {
-            if (list.lastPrevDown && !list.prevLongFired)
+            if (_popup.lastPrevDown && !_popup.prevLongFired)
             {
                 if (list.selectedIndex > 0)
                     list.selectedIndex--;
@@ -396,13 +397,13 @@ namespace pipgui
                     list.selectedIndex = (uint8_t)(list.itemCount - 1);
                 changed = true;
             }
-            list.prevHoldStartMs = 0;
-            list.prevLongFired = false;
+            _popup.prevHoldStartMs = 0;
+            _popup.prevLongFired = false;
         }
 
-        list.lastNextDown = nextDown;
-        list.lastPrevDown = prevDown;
-        list.lastSelectDown = selectDown;
+        _popup.lastNextDown = nextDown;
+        _popup.lastPrevDown = prevDown;
+        _popup.lastSelectDown = selectDown;
 
         if (changed)
         {
@@ -430,7 +431,7 @@ namespace pipgui
             requestRedraw();
             return;
         }
-        if (!_flags.popupClosing && elapsed < dur)
+        if (elapsed < dur)
         {
             requestRedraw();
         }

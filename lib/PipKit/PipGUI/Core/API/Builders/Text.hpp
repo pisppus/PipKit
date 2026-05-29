@@ -15,6 +15,8 @@ namespace pipgui
         uint16_t _fg565;
         uint16_t _bg565;
         TextAlign _align;
+        UiRect _area;
+        bool _hasArea;
         TextFluentT(GUI *g)
             : detail::FluentLifetime(g),
               _x(-1), _y(-1),
@@ -24,7 +26,9 @@ namespace pipgui
               _text(),
               _fg565(0xFFFF),
               _bg565(0x0000),
-              _align(TextAlign::Left)
+              _align(TextAlign::Left),
+              _area{0, 0, 0, 0},
+              _hasArea(false)
         {
         }
 
@@ -35,6 +39,14 @@ namespace pipgui
             PIPGUI_FLUENT_GUARD();
             _x = x;
             _y = y;
+            return *this;
+        }
+
+        TextFluentT &in(const UiRect &area)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _area = area;
+            _hasArea = true;
             return *this;
         }
 
@@ -279,6 +291,121 @@ namespace pipgui
         {
             PIPGUI_FLUENT_GUARD();
             _align = a;
+            return *this;
+        }
+
+        void draw();
+    };
+
+    struct DrawTextBoxFluent : detail::FluentLifetime
+    {
+        PIPGUI_DEFAULT_FLUENT_MOVE(DrawTextBoxFluent);
+        int16_t _x, _y, _w, _h;
+        std::optional<FontId> _fontId;
+        uint16_t _sizePx;
+        uint16_t _weight;
+        String _text;
+        uint16_t _fg565;
+        uint16_t _bg565;
+        TextAlign _align;
+        int16_t _lineGap;
+        UiRect _area;
+        bool _hasArea;
+
+        DrawTextBoxFluent(GUI *g)
+            : detail::FluentLifetime(g),
+              _x(0), _y(0), _w(0), _h(0),
+              _fontId(std::nullopt),
+              _sizePx(0),
+              _weight(0),
+              _text(),
+              _fg565(0xFFFF),
+              _bg565(0x0000),
+              _align(TextAlign::Left),
+              _lineGap(-1),
+              _area{0, 0, 0, 0},
+              _hasArea(false)
+        {
+        }
+
+        ~DrawTextBoxFluent() { draw(); }
+
+        DrawTextBoxFluent &pos(int16_t x, int16_t y)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _x = x;
+            _y = y;
+            return *this;
+        }
+
+        DrawTextBoxFluent &size(int16_t w, int16_t h)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _w = w;
+            _h = h;
+            return *this;
+        }
+
+        DrawTextBoxFluent &in(const UiRect &area)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _area = area;
+            _hasArea = true;
+            return *this;
+        }
+
+        DrawTextBoxFluent &font(FontId fontId, uint16_t sizePx)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _fontId = fontId;
+            _sizePx = sizePx;
+            return *this;
+        }
+
+        DrawTextBoxFluent &weight(uint16_t weight)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _weight = weight;
+            return *this;
+        }
+
+        DrawTextBoxFluent &weight(WeightToken weight)
+        {
+            return this->weight(weight.value);
+        }
+
+        DrawTextBoxFluent &text(const String &t)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _text = t;
+            return *this;
+        }
+
+        DrawTextBoxFluent &color(uint16_t fg565)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _fg565 = fg565;
+            return *this;
+        }
+
+        DrawTextBoxFluent &bgColor(uint16_t bg565)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _bg565 = bg565;
+            return *this;
+        }
+
+        DrawTextBoxFluent &align(TextAlign a)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _align = a;
+            return *this;
+        }
+
+        DrawTextBoxFluent &lineGap(int16_t px)
+        {
+            PIPGUI_FLUENT_GUARD();
+            _lineGap = px;
             return *this;
         }
 

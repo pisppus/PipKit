@@ -342,7 +342,7 @@ namespace pipgui
         if (w <= 0 || h <= 0)
             return;
 
-        if (logicalRotationActive() && !_flags.inSpritePass)
+        if (logicalRotationActive() && !_flags.inSpritePass && _flags.tiledMode)
         {
             _flags.needRedraw = 1;
             return;
@@ -395,9 +395,58 @@ namespace pipgui
 
         if (logicalRotationActive())
         {
+            const auto clipRotatedRect = [&](const detail::DirtyRect &r, int16_t &x0, int16_t &y0, int16_t &w, int16_t &h) -> bool
+            {
+                if (r.w <= 0 || r.h <= 0)
+                    return false;
+
+                x0 = r.x;
+                y0 = r.y;
+                w = r.w;
+                h = r.h;
+
+                if (x0 < 0)
+                {
+                    w += x0;
+                    x0 = 0;
+                }
+                if (y0 < 0)
+                {
+                    h += y0;
+                    y0 = 0;
+                }
+                if (w <= 0 || h <= 0)
+                    return false;
+
+                if (x0 + w > sw)
+                    w = static_cast<int16_t>(sw - x0);
+                if (y0 + h > sh)
+                    h = static_cast<int16_t>(sh - y0);
+                return w > 0 && h > 0;
+            };
+
+            for (uint8_t i = 0; i < _dirty.count; ++i)
+            {
+                int16_t x0 = 0, y0 = 0, w = 0, h = 0;
+                if (!clipRotatedRect(_dirty.rects[i], x0, y0, w, h))
+                    continue;
+
+                if (debugDirty && buf)
+                    Debug::drawOverlay(buf, stride, x0, y0, w, h);
+
+                (void)presentOrthogonalRotatedSpriteRegion(buf,
+                                                           stride,
+                                                           static_cast<int16_t>(_render.screenWidth),
+                                                           static_cast<int16_t>(_render.screenHeight),
+                                                           logicalRotationDelta(),
+                                                           x0,
+                                                           y0,
+                                                           w,
+                                                           h,
+                                                           "present");
+            }
             if (debugDirty)
                 Debug::clearRects();
-            presentSprite(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight, "present");
             _dirty.count = 0;
             return;
         }

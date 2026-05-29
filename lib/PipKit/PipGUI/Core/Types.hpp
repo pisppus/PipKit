@@ -114,6 +114,37 @@ namespace pipgui
         SlideY
     };
 
+    enum class NavButton : uint8_t
+    {
+        Next,
+        Prev,
+        Select,
+        Combo
+    };
+
+    enum class NavEventCode : uint8_t
+    {
+        Pressed,
+        LongPressed,
+        Repeat,
+        Released
+    };
+
+    struct NavEvent
+    {
+        uint8_t screenId = INVALID_SCREEN_ID;
+        NavButton button = NavButton::Next;
+        NavEventCode code = NavEventCode::Pressed;
+        uint32_t nowMs = 0;
+        uint32_t heldMs = 0;
+        bool longPress = false;
+        bool nextDown = false;
+        bool prevDown = false;
+        bool selectDown = false;
+        bool comboDown = false;
+        bool hasSelect = false;
+    };
+
     enum GraphDirection : uint8_t
     {
         LeftToRight,
@@ -134,6 +165,14 @@ namespace pipgui
         BottomUp,
         LeftRight,
         RightLeft
+    };
+
+    enum class TriangleDirection : uint8_t
+    {
+        Up,
+        Right,
+        Down,
+        Left
     };
 
     enum GlowAnim : uint8_t
@@ -200,6 +239,29 @@ namespace pipgui
             {
                 return (code == TokCenter) ? UiJustify::Center : ((code == TokRight) ? UiJustify::End : UiJustify::Start);
             }
+
+            constexpr operator TriangleDirection() const noexcept
+            {
+                return (code == TokRight) ? TriangleDirection::Right : TriangleDirection::Left;
+            }
+        };
+
+        struct DirectionToken
+        {
+            enum Code : uint8_t
+            {
+                TokUp,
+                TokDown
+            };
+
+            constexpr DirectionToken(Code c) : code(c) {}
+
+            Code code;
+
+            constexpr operator TriangleDirection() const noexcept
+            {
+                return (code == TokUp) ? TriangleDirection::Up : TriangleDirection::Down;
+            }
         };
 
         struct NoneToken
@@ -239,6 +301,8 @@ namespace pipgui
     inline constexpr detail::AlignToken Right{detail::AlignToken::TokRight};
     inline constexpr detail::AlignToken Top{detail::AlignToken::TokTop};
     inline constexpr detail::AlignToken Bottom{detail::AlignToken::TokBottom};
+    inline constexpr detail::DirectionToken Up{detail::DirectionToken::TokUp};
+    inline constexpr detail::DirectionToken Down{detail::DirectionToken::TokDown};
 
     inline constexpr detail::NoneToken None{};
     inline constexpr detail::NormalToken Normal{};
@@ -247,6 +311,7 @@ namespace pipgui
     inline constexpr detail::PulseToken Pulse{};
 
     using ScreenCallback = void (*)(GUI &ui);
+    using NavHandler = bool (*)(GUI &ui, const NavEvent &event, void *userData);
     using BacklightHandler = void (*)(uint16_t level);
     using StatusBarCustomCallback = void (*)(GUI &ui, int16_t x, int16_t y, int16_t w, int16_t h);
 

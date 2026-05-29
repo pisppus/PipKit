@@ -200,10 +200,11 @@ $sources = @($libSources) + @($appSources)
 
 function Get-DepTicks ([string]$depFile) {
     if (!(Test-Path $depFile)) { return -1 }
+    $lines = @([System.IO.File]::ReadAllLines($depFile) | Where-Object { $_.Trim() })
+    if ($lines.Count -eq 0) { return -1 }
     $maxTick = 0L
-    foreach ($line in [System.IO.File]::ReadAllLines($depFile)) {
+    foreach ($line in $lines) {
         $p = $line.Trim()
-        if (!$p) { continue }
         if (!(Test-Path $p)) { return -1 }
         $t = (Get-Item $p).LastWriteTimeUtc.Ticks
         if ($t -gt $maxTick) { $maxTick = $t }
@@ -273,6 +274,10 @@ if ($toCompile -gt 0) {
                 }
             }
             if ($LASTEXITCODE -ne 0) { Write-Fatal "Compile failed: $($work.Relative)" }
+            if ($includes.Count -eq 0) {
+                Write-Warn "No includes captured for $($work.Relative) - raw sample:"
+                $raw | Select-Object -First 5 | ForEach-Object { Write-Host "    |$_|" -ForegroundColor DarkYellow }
+            }
             [System.IO.File]::WriteAllLines($work.Dep, [string[]]$includes)
         }
     } else {

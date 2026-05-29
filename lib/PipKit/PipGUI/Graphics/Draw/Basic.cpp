@@ -4,6 +4,11 @@
 
 namespace pipgui
 {
+    namespace detail
+    {
+        [[nodiscard]] bool recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept;
+    }
+
     namespace
     {
         constexpr float kArcDegToRad = 0.01745329252f;
@@ -412,6 +417,11 @@ namespace pipgui
                 {
                     pipcore::Platform *plat = pipcore::GetPlatform();
                     masks[r] = plat ? static_cast<uint8_t *>(plat->alloc(11 * 11, pipcore::AllocCaps::Default)) : nullptr;
+                    if (!masks[r] && plat &&
+                        detail::recoverFromAllocFailure(plat, 11U * 11U, pipcore::AllocCaps::Default))
+                    {
+                        masks[r] = static_cast<uint8_t *>(plat->alloc(11 * 11, pipcore::AllocCaps::Default));
+                    }
                     if (!masks[r])
                     {
                         outSize = 0;
@@ -506,14 +516,14 @@ namespace pipgui
         {
             if (x1 < x0)
                 std::swap(x0, x1);
-            fillRect(x0, y0, (int16_t)(x1 - x0 + 1), 1, color);
+            fillRect(x0 + _render.originX, y0 + _render.originY, (int16_t)(x1 - x0 + 1), 1, color);
             return;
         }
         if (x0 == x1)
         {
             if (y1 < y0)
                 std::swap(y0, y1);
-            fillRect(x0, y0, 1, (int16_t)(y1 - y0 + 1), color);
+            fillRect(x0 + _render.originX, y0 + _render.originY, 1, (int16_t)(y1 - y0 + 1), color);
             return;
         }
 

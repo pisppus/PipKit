@@ -19,9 +19,28 @@ namespace pipgui
 {
     namespace detail
     {
+        static GUI *g_activeGui = nullptr;
+        static bool g_recoveringFromAllocFailure = false;
+
         pipcore::Platform *resolvePlatform(GUI *gui) noexcept
         {
             return gui ? gui->platform() : nullptr;
+        }
+
+        bool recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept
+        {
+            if (g_recoveringFromAllocFailure)
+                return false;
+            GUI *gui = g_activeGui;
+            if (!gui)
+                return false;
+            if (plat && gui->platform() && plat != gui->platform())
+                return false;
+
+            g_recoveringFromAllocFailure = true;
+            const bool recovered = gui->recoverFromAllocationFailure(bytes, caps);
+            g_recoveringFromAllocFailure = false;
+            return recovered;
         }
     }
 
@@ -411,6 +430,7 @@ namespace pipgui
 
     GUI::GUI()
     {
+        detail::g_activeGui = this;
     }
 
     GUI::~GUI() noexcept
@@ -432,6 +452,8 @@ namespace pipgui
         freeRotationBuffer(plat);
         _render.sprite.deleteSprite();
         _flags.spriteEnabled = 0;
+        if (detail::g_activeGui == this)
+            detail::g_activeGui = nullptr;
     }
 
     template <typename T>
@@ -494,20 +516,14 @@ namespace pipgui
     {
         safeFree(plat, _blur.smallIn);
         safeFree(plat, _blur.smallTmp);
-        safeFree(plat, _blur.rowR);
-        safeFree(plat, _blur.rowG);
-        safeFree(plat, _blur.rowB);
-        safeFree(plat, _blur.colR);
-        safeFree(plat, _blur.colG);
-        safeFree(plat, _blur.colB);
         safeFree(plat, _blur.lookup);
+        _blur.captureSprite.deleteSprite();
         _blur.workLen = 0;
-        _blur.rowCap = 0;
-        _blur.colCap = 0;
         _blur.lookupSw = 0;
         _blur.lookupSh = 0;
         _blur.lookupW = 0;
         _blur.lookupH = 0;
+        _blur.lookupRadius = 0;
         _blur.lastUseMs = 0;
     }
 
@@ -539,6 +555,44 @@ namespace pipgui
             _screen.graphAreas[i] = nullptr;
             ObjectGuard<GraphArea> guard(plat, a);
         }
+    }
+
+    bool GUI::releaseGraphCachesForRecovery(pipcore::Platform *plat) noexcept
+    {
+        if (!plat || !_screen.graphAreas)
+            return false;
+
+        bool released = false;
+
+        for (uint16_t i = 0; i < _screen.capacity; ++i)
+        {
+            GraphArea *area = _screen.graphAreas[i];
+            if (!area)
+                continue;
+
+            if (area->innerCache)
+            {
+                detail::free(plat, area->innerCache);
+                area->innerCache = nullptr;
+                released = true;
+            }
+            area->innerCacheW = 0;
+            area->innerCacheH = 0;
+            area->innerCacheDisabled = false;
+
+            if (area->renderCache)
+            {
+                detail::free(plat, area->renderCache);
+                area->renderCache = nullptr;
+                released = true;
+            }
+            area->renderCacheW = 0;
+            area->renderCacheH = 0;
+            area->renderCacheValid = false;
+            area->renderCacheTileMask = 0;
+            area->renderCacheDisabled = false;
+        }
+        return released;
     }
 
     void GUI::freeLists(pipcore::Platform *plat) noexcept
@@ -588,11 +642,13 @@ namespace pipgui
         detail::free(plat, _screen.graphAreas);
         detail::free(plat, _screen.lists);
         detail::free(plat, _screen.tiles);
+        detail::free(plat, _screen.navBindings);
 
         _screen.callbacks = nullptr;
         _screen.graphAreas = nullptr;
         _screen.lists = nullptr;
         _screen.tiles = nullptr;
+        _screen.navBindings = nullptr;
         _screen.capacity = 0;
         _screen.current = INVALID_SCREEN_ID;
         _screen.registrySynced = false;
@@ -607,6 +663,8 @@ namespace pipgui
     {
         freeAdaptivePreviewBuffer(platform());
         freeRotationBuffer(platform());
+        _rotationAnim.active = false;
+        _rotationAnim.switched = false;
         _disp.display = nullptr;
         _render.physicalWidth = 0;
         _render.physicalHeight = 0;
@@ -618,7 +676,21 @@ namespace pipgui
         _render.sprite.deleteSprite();
         _render.activeSprite = nullptr;
         _flags.spriteEnabled = 0;
+        _flags.tiledMode = 0;
+        _flags.autoTiledMode = 0;
+        _flags.inSpritePass = 0;
+        _flags.screenTransition = 0;
+        _flags.needRedraw = 0;
+        _flags.dirtyRedrawPending = 0;
         _dirty.count = 0;
+        _clip = {};
+        _nav = {};
+        _screen.to = _screen.current;
+        _screen.transDir = 0;
+        _screen.animStartMs = 0;
+        _popup.lastRectValid = false;
+        _toast.lastRectValid = false;
+        _diag.lastTiledPromoteTryMs = 0;
 #if PIPGUI_SCREENSHOTS
         freeScreenshotStream(platform());
 #endif
@@ -707,23 +779,45 @@ namespace pipgui
         detail::GuiAccess::startLogo(*_gui, _title, _subtitle, _anim);
     }
 
-    void ListInputFluent::apply()
+    void BindNavFluent::apply()
     {
         if (_consumed)
             return;
         _consumed = true;
         if (!_gui)
             return;
-        _gui->_manualInputMask |= GUI::ManualInput_List;
+        if (!_clear && !_handler)
+            return;
         const uint8_t screenId = _gui->currentScreen();
         if (screenId == INVALID_SCREEN_ID)
             return;
-        GUI::InputState input;
-        input.nextDown = _nextDown;
-        input.prevDown = _prevDown;
-        input.selectDown = _selectDown;
-        input.hasSelect = _hasSelect;
-        detail::GuiAccess::handleListInput(*_gui, screenId, input);
+        _gui->bindNavHandler(screenId, _clear ? nullptr : _handler, _clear ? nullptr : _userData);
+    }
+
+    void UseListNavFluent::apply()
+    {
+        if (_consumed)
+            return;
+        _consumed = true;
+        if (!_gui)
+            return;
+        const uint8_t screenId = _gui->currentScreen();
+        if (screenId == INVALID_SCREEN_ID)
+            return;
+        _gui->bindListNav(screenId);
+    }
+
+    void UseTileNavFluent::apply()
+    {
+        if (_consumed)
+            return;
+        _consumed = true;
+        if (!_gui)
+            return;
+        const uint8_t screenId = _gui->currentScreen();
+        if (screenId == INVALID_SCREEN_ID)
+            return;
+        _gui->bindTileNav(screenId);
     }
 
     void PopupMenuInputFluent::apply()
@@ -828,23 +922,51 @@ namespace pipgui
         _render.originY = 0;
 
         _render.sprite.setPlatform(plat);
+        _blur.captureSprite.setPlatform(plat);
 
         _render.sprite.deleteSprite();
         _flags.tiledMode = 0;
 
         const int16_t sw = (int16_t)_render.screenWidth;
         const int16_t sh = (int16_t)_render.screenHeight;
+        const auto tryCreateMainCanvas = [&](bool tiled, bool autoTiled) noexcept -> bool
+        {
+            if (!tiled)
+            {
+                releaseScreenshotGalleryCache(plat);
+                freeScreenshotStream(plat);
+                freeBlurBuffers(plat);
+                freeRotationLineBuffer(plat);
+                (void)releaseGraphCachesForRecovery(plat);
+            }
+
+            const int16_t targetH = tiled ? ((sh > 1) ? (int16_t)((sh + 1) / 2) : sh) : sh;
+            const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
+            _render.sprite.deleteSprite();
+            const bool ok = _render.sprite.createSprite(sw, targetH);
+            if (ok)
+            {
+                _flags.tiledMode = tiled ? 1U : 0U;
+                _flags.autoTiledMode = (tiled && autoTiled) ? 1U : 0U;
+                return true;
+            }
+            if (plat && bytes > 0 &&
+                detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default) &&
+                _render.sprite.createSprite(sw, targetH))
+            {
+                _flags.tiledMode = tiled ? 1U : 0U;
+                _flags.autoTiledMode = (tiled && autoTiled) ? 1U : 0U;
+                return true;
+            }
+            return false;
+        };
+
         bool ok = false;
         if (!forceTiles)
-            ok = _render.sprite.createSprite(sw, sh);
+            ok = tryCreateMainCanvas(false, false);
 
         if (!ok)
-        {
-            const int16_t tileH = (sh > 1) ? (int16_t)((sh + 1) / 2) : sh;
-            _render.sprite.deleteSprite();
-            ok = _render.sprite.createSprite(sw, tileH);
-            _flags.tiledMode = ok ? 1U : 0U;
-        }
+            ok = tryCreateMainCanvas(true, !forceTiles);
 
         _flags.spriteEnabled = ok ? 1U : 0U;
         _render.activeSprite = _flags.spriteEnabled ? &_render.sprite : nullptr;
@@ -890,6 +1012,8 @@ namespace pipgui
         _adaptivePreview.startMs = 0;
         _adaptivePreview.lastPresentedW = 0;
         _adaptivePreview.lastPresentedH = 0;
+        _adaptivePreview.lastOutputW = 0;
+        _adaptivePreview.lastOutputH = 0;
         if (_render.physicalWidth > 0 && _render.physicalHeight > 0)
         {
             _render.screenWidth = _render.physicalWidth;
@@ -934,6 +1058,23 @@ namespace pipgui
     bool GUI::presentOrthogonalRotatedSprite(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
                                              uint8_t rotationDelta, const char *stage)
     {
+        return presentOrthogonalRotatedSpriteRegion(src,
+                                                    srcStride,
+                                                    srcW,
+                                                    srcH,
+                                                    rotationDelta,
+                                                    0,
+                                                    0,
+                                                    srcW,
+                                                    srcH,
+                                                    stage);
+    }
+
+    bool GUI::presentOrthogonalRotatedSpriteRegion(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
+                                                   uint8_t rotationDelta,
+                                                   int16_t srcX, int16_t srcY, int16_t rectW, int16_t rectH,
+                                                   const char *stage)
+    {
         if (!_disp.display || !src || srcStride <= 0 || srcW <= 0 || srcH <= 0)
             return false;
 
@@ -942,65 +1083,308 @@ namespace pipgui
         if (physW == 0 || physH == 0)
             return false;
 
+        if (srcX < 0)
+        {
+            rectW += srcX;
+            srcX = 0;
+        }
+        if (srcY < 0)
+        {
+            rectH += srcY;
+            srcY = 0;
+        }
+        if (srcX + rectW > srcW)
+            rectW = static_cast<int16_t>(srcW - srcX);
+        if (srcY + rectH > srcH)
+            rectH = static_cast<int16_t>(srcH - srcY);
+        if (rectW <= 0 || rectH <= 0)
+            return false;
+
         if (rotationDelta == 0)
         {
-            _disp.display->writeRect565(0, 0, srcW, srcH, src, srcStride);
+            _disp.display->writeRect565(srcX,
+                                        srcY,
+                                        rectW,
+                                        rectH,
+                                        src + static_cast<size_t>(srcY) * static_cast<size_t>(srcStride) + srcX,
+                                        srcStride);
             reportPlatformErrorOnce(stage);
             pipcore::Platform *plat = pipcore::GetPlatform();
             return !plat || plat->lastError() == pipcore::PlatformError::None;
         }
 
-        if (_rotationAnim.lineBufCap < physW)
+        const uint8_t delta = rotationDelta & 3U;
+        int16_t dstX = 0;
+        int16_t dstY = 0;
+        int16_t writeW = rectW;
+        int16_t writeH = rectH;
+        switch (delta)
+        {
+        case 1:
+            dstX = static_cast<int16_t>(srcH - srcY - rectH);
+            dstY = srcX;
+            writeW = rectH;
+            writeH = rectW;
+            break;
+        case 2:
+            dstX = static_cast<int16_t>(srcW - srcX - rectW);
+            dstY = static_cast<int16_t>(srcH - srcY - rectH);
+            break;
+        case 3:
+            dstX = srcY;
+            dstY = static_cast<int16_t>(srcW - srcX - rectW);
+            writeW = rectH;
+            writeH = rectW;
+            break;
+        default:
+            return false;
+        }
+
+        if (dstX < 0 || dstY < 0)
+            return false;
+        if (dstX + writeW > static_cast<int16_t>(physW))
+            writeW = static_cast<int16_t>(static_cast<int16_t>(physW) - dstX);
+        if (dstY + writeH > static_cast<int16_t>(physH))
+            writeH = static_cast<int16_t>(static_cast<int16_t>(physH) - dstY);
+        if (writeW <= 0 || writeH <= 0)
+            return false;
+
+        constexpr int16_t kChunkRows = 8;
+        const uint16_t lineNeed = static_cast<uint16_t>(static_cast<uint16_t>(writeW) * static_cast<uint16_t>(kChunkRows));
+        if (_rotationAnim.lineBufCap < lineNeed)
         {
             pipcore::Platform *plat = platform();
-            uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
+            uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(lineNeed) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
             if (!newBuf)
-                newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+            {
+                if (plat)
+                    (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(lineNeed) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
+                newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(lineNeed) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+            }
+            if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(lineNeed) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(lineNeed) * sizeof(uint16_t), pipcore::AllocCaps::Default));
             if (newBuf)
             {
-                freeRotationBuffer(plat);
+                freeRotationLineBuffer(plat);
                 _rotationAnim.lineBuf = newBuf;
-                _rotationAnim.lineBufCap = physW;
+                _rotationAnim.lineBufCap = lineNeed;
             }
         }
 
-        if (!_rotationAnim.lineBuf || _rotationAnim.lineBufCap < physW)
+        if (!_rotationAnim.lineBuf || _rotationAnim.lineBufCap < lineNeed)
             return false;
 
-        for (int16_t y = 0; y < physH; ++y)
+        for (int16_t y0 = 0; y0 < writeH; y0 = static_cast<int16_t>(y0 + kChunkRows))
         {
-            switch (rotationDelta & 3U)
+            const int16_t chunkH = static_cast<int16_t>(std::min<int32_t>(kChunkRows, writeH - y0));
+            for (int16_t row = 0; row < chunkH; ++row)
             {
-            case 1:
-            {
-                const int16_t srcX = y;
-                for (int16_t x = 0; x < physW; ++x)
-                    _rotationAnim.lineBuf[x] = src[(size_t)(srcH - 1 - x) * (size_t)srcStride + (size_t)srcX];
-                break;
+                const int16_t localY = static_cast<int16_t>(y0 + row);
+                uint16_t *dst = _rotationAnim.lineBuf + static_cast<size_t>(row) * writeW;
+                switch (delta)
+                {
+                case 1:
+                {
+                    const int16_t sampleX = static_cast<int16_t>(srcX + localY);
+                    for (int16_t x = 0; x < writeW; ++x)
+                    {
+                        const int16_t sampleY = static_cast<int16_t>(srcY + rectH - 1 - x);
+                        dst[x] = src[static_cast<size_t>(sampleY) * static_cast<size_t>(srcStride) + sampleX];
+                    }
+                    break;
+                }
+                case 2:
+                {
+                    const int16_t sampleY = static_cast<int16_t>(srcY + rectH - 1 - localY);
+                    const uint16_t *srcRow = src + static_cast<size_t>(sampleY) * static_cast<size_t>(srcStride);
+                    for (int16_t x = 0; x < writeW; ++x)
+                        dst[x] = srcRow[srcX + rectW - 1 - x];
+                    break;
+                }
+                case 3:
+                {
+                    const int16_t sampleX = static_cast<int16_t>(srcX + rectW - 1 - localY);
+                    for (int16_t x = 0; x < writeW; ++x)
+                    {
+                        const int16_t sampleY = static_cast<int16_t>(srcY + x);
+                        dst[x] = src[static_cast<size_t>(sampleY) * static_cast<size_t>(srcStride) + sampleX];
+                    }
+                    break;
+                }
+                }
             }
-            case 2:
-            {
-                const int16_t srcY = srcH - 1 - y;
-                const uint16_t *srcRow = src + (size_t)srcY * (size_t)srcStride;
-                for (int16_t x = 0; x < physW; ++x)
-                    _rotationAnim.lineBuf[x] = srcRow[srcW - 1 - x];
-                break;
-            }
-            case 3:
-            {
-                const int16_t srcX = srcW - 1 - y;
-                for (int16_t x = 0; x < physW; ++x)
-                    _rotationAnim.lineBuf[x] = src[(size_t)x * (size_t)srcStride + (size_t)srcX];
-                break;
-            }
-            }
-
-            _disp.display->writeRect565(0, y, physW, 1, _rotationAnim.lineBuf, physW);
+            _disp.display->writeRect565(dstX,
+                                        static_cast<int16_t>(dstY + y0),
+                                        writeW,
+                                        chunkH,
+                                        _rotationAnim.lineBuf,
+                                        writeW);
         }
 
         reportPlatformErrorOnce(stage);
         pipcore::Platform *plat = pipcore::GetPlatform();
         return !plat || plat->lastError() == pipcore::PlatformError::None;
+    }
+
+    bool GUI::recoverFromAllocationFailure(size_t, pipcore::AllocCaps) noexcept
+    {
+        pipcore::Platform *plat = platform();
+        if (!plat)
+            return false;
+
+        bool reclaimed = false;
+
+        const bool hadGalleryEntries = (_shots.entries != nullptr);
+#if (PIPGUI_SCREENSHOT_MODE == 2)
+        const bool hadGalleryRowBuf = (_shots.rowBuf != nullptr);
+#else
+        const bool hadGalleryRowBuf = false;
+#endif
+        if (hadGalleryEntries || hadGalleryRowBuf)
+        {
+            freeScreenshotGallery(plat);
+            reclaimed = true;
+        }
+
+        const bool hadShotStream = (_shotStream.buffer != nullptr) || _shotStream.active;
+        if (hadShotStream)
+        {
+            freeScreenshotStream(plat);
+            reclaimed = true;
+        }
+
+        const bool hadBlur = (_blur.smallIn != nullptr) || (_blur.smallTmp != nullptr) ||
+                             (_blur.lookup != nullptr) || (_blur.captureSprite.getBuffer() != nullptr);
+        if (hadBlur)
+        {
+            freeBlurBuffers(plat);
+            reclaimed = true;
+        }
+
+        const bool hadAdaptive = (_adaptivePreview.lineBuf != nullptr);
+        if (hadAdaptive)
+        {
+            freeAdaptivePreviewBuffer(plat);
+            reclaimed = true;
+        }
+
+        const bool rotationActiveAtEntry = _rotationAnim.active;
+        const bool hadRotation = (_rotationAnim.lineBuf != nullptr) || _rotationAnim.active;
+        if (hadRotation)
+        {
+            if (rotationActiveAtEntry)
+            {
+                if (!_rotationAnim.streamingFrame)
+                    freeRotationLineBuffer(plat);
+            }
+            else
+            {
+                freeRotationBuffer(plat);
+            }
+            reclaimed = true;
+        }
+
+        reclaimed = releaseGraphCachesForRecovery(plat) || reclaimed;
+
+        if (_rotationAnim.active && !rotationActiveAtEntry)
+        {
+            _disp.rotation = _rotationAnim.switched ? _rotationAnim.to : _rotationAnim.from;
+            _rotationAnim.active = false;
+            _rotationAnim.switched = false;
+        }
+
+        if (_flags.screenTransition)
+        {
+            if (_screen.to < _screen.capacity)
+                _screen.current = _screen.to;
+            _flags.screenTransition = 0;
+            resetNavDispatch();
+        }
+
+        if (rotationActiveAtEntry ||
+            _flags.tiledMode || !_disp.display || !_flags.spriteEnabled || _render.screenWidth == 0 || _render.screenHeight == 0)
+            return reclaimed;
+
+        const uint8_t delta = logicalRotationDelta();
+        const uint16_t canvasW = (_render.physicalWidth > 0 && _render.physicalHeight > 0)
+                                     ? ((delta & 1U) ? _render.physicalHeight : _render.physicalWidth)
+                                     : _render.screenWidth;
+        const uint16_t canvasH = (_render.physicalWidth > 0 && _render.physicalHeight > 0)
+                                     ? ((delta & 1U) ? _render.physicalWidth : _render.physicalHeight)
+                                     : _render.screenHeight;
+        const int16_t sw = static_cast<int16_t>(canvasW);
+        const int16_t sh = static_cast<int16_t>(canvasH);
+        const int16_t tileH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
+
+        _render.sprite.deleteSprite();
+        const bool ok = _render.sprite.createSprite(sw, tileH);
+        _flags.spriteEnabled = ok ? 1U : 0U;
+        _flags.tiledMode = ok ? 1U : 0U;
+        _flags.autoTiledMode = ok ? 1U : 0U;
+        _render.activeSprite = ok ? &_render.sprite : nullptr;
+        _clip = {};
+        _dirty.count = 0;
+        _flags.dirtyRedrawPending = 0;
+        _flags.needRedraw = ok ? 1U : 0U;
+        Debug::clearRects();
+        return reclaimed || ok;
+    }
+
+    bool GUI::tryPromoteAutoTiledCanvas(uint32_t now) noexcept
+    {
+        if (!_flags.tiledMode || !_flags.autoTiledMode || !_disp.display || !_flags.spriteEnabled)
+            return false;
+        if (_flags.bootActive || _flags.errorActive || _flags.notifActive ||
+            _flags.popupActive || _flags.toastActive || _flags.screenTransition || _rotationAnim.active)
+            return false;
+        if (_diag.lastTiledPromoteTryMs != 0 && (now - _diag.lastTiledPromoteTryMs) < 1200U)
+            return false;
+        _diag.lastTiledPromoteTryMs = now;
+
+        pipcore::Platform *plat = platform();
+        if (!plat || _render.screenWidth == 0 || _render.screenHeight == 0)
+            return false;
+
+        releaseScreenshotGalleryCache(plat);
+        freeScreenshotStream(plat);
+        freeBlurBuffers(plat);
+        freeRotationLineBuffer(plat);
+        (void)releaseGraphCachesForRecovery(plat);
+
+        const uint8_t delta = logicalRotationDelta();
+        const uint16_t fullW = (delta & 1U) ? _render.physicalHeight : _render.physicalWidth;
+        const uint16_t fullH = (delta & 1U) ? _render.physicalWidth : _render.physicalHeight;
+        const int16_t fullWi = static_cast<int16_t>(fullW);
+        const int16_t fullHi = static_cast<int16_t>(fullH);
+        const int16_t tileH = (fullH > 1) ? static_cast<int16_t>((fullH + 1U) / 2U) : static_cast<int16_t>(fullH);
+        const int16_t tileW = static_cast<int16_t>(fullW);
+
+        _render.sprite.deleteSprite();
+        if (_render.sprite.createSprite(fullWi, fullHi))
+        {
+            _flags.tiledMode = 0;
+            _flags.autoTiledMode = 0;
+            _flags.spriteEnabled = 1;
+            _render.activeSprite = &_render.sprite;
+            _clip = {};
+            _dirty.count = 0;
+            _flags.dirtyRedrawPending = 0;
+            _flags.needRedraw = 1;
+            Debug::clearRects();
+            return true;
+        }
+
+        const bool restored = _render.sprite.createSprite(tileW, tileH);
+        _flags.spriteEnabled = restored ? 1U : 0U;
+        _flags.tiledMode = restored ? 1U : 0U;
+        _flags.autoTiledMode = restored ? 1U : 0U;
+        _render.activeSprite = restored ? &_render.sprite : nullptr;
+        _clip = {};
+        _dirty.count = 0;
+        _flags.dirtyRedrawPending = 0;
+        _flags.needRedraw = restored ? 1U : 0U;
+        Debug::clearRects();
+        return false;
     }
 
     void GUI::freeAdaptivePreviewBuffer(pipcore::Platform *plat) noexcept
@@ -1011,20 +1395,215 @@ namespace pipgui
         _adaptivePreview.lineBufCap = 0;
         _adaptivePreview.lastPresentedW = 0;
         _adaptivePreview.lastPresentedH = 0;
+        _adaptivePreview.lastOutputW = 0;
+        _adaptivePreview.lastOutputH = 0;
     }
 
     void GUI::freeRotationBuffer(pipcore::Platform *plat) noexcept
     {
-        if (_rotationAnim.snapshot && plat)
-            plat->free(_rotationAnim.snapshot);
-        _rotationAnim.snapshot = nullptr;
-        _rotationAnim.snapshotW = 0;
-        _rotationAnim.snapshotH = 0;
-        _rotationAnim.snapshotStride = 0;
+        _rotationAnim.startedTiled = false;
+        _rotationAnim.startedAutoTiled = false;
+        _rotationAnim.streamingFrame = false;
+        freeRotationLineBuffer(plat);
+    }
+
+    void GUI::freeRotationLineBuffer(pipcore::Platform *plat) noexcept
+    {
         if (_rotationAnim.lineBuf && plat)
             plat->free(_rotationAnim.lineBuf);
         _rotationAnim.lineBuf = nullptr;
         _rotationAnim.lineBufCap = 0;
+    }
+
+    bool GUI::ensureRotationLineBuffer(uint32_t pixels) noexcept
+    {
+        if (pixels == 0 || pixels > (UINT32_MAX / sizeof(uint16_t)))
+            return false;
+        if (_rotationAnim.lineBuf && _rotationAnim.lineBufCap >= pixels)
+            return true;
+
+        pipcore::Platform *plat = platform();
+        if (!plat)
+            return false;
+
+        const size_t bytes = static_cast<size_t>(pixels) * sizeof(uint16_t);
+        uint16_t *newBuf = static_cast<uint16_t *>(plat->alloc(bytes, pipcore::AllocCaps::PreferInternal));
+        if (!newBuf)
+        {
+            (void)detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::PreferInternal);
+            newBuf = static_cast<uint16_t *>(plat->alloc(bytes, pipcore::AllocCaps::Default));
+        }
+        if (!newBuf && detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default))
+            newBuf = static_cast<uint16_t *>(plat->alloc(bytes, pipcore::AllocCaps::Default));
+        if (!newBuf)
+            return false;
+
+        freeRotationLineBuffer(plat);
+        _rotationAnim.lineBuf = newBuf;
+        _rotationAnim.lineBufCap = pixels;
+        return true;
+    }
+
+    void GUI::renderCurrentFrameToTileBand(int16_t tileY, int16_t, uint32_t now)
+    {
+        (void)now;
+        const int16_t stride = _render.sprite.width();
+        const int16_t tileH = _render.sprite.height();
+        if (stride <= 0 || tileH <= 0)
+            return;
+
+        _render.originX = 0;
+        _render.originY = tileY;
+        _render.sprite.setClipRect(0, 0, stride, tileH);
+
+        const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
+                                             ? _screen.callbacks[_screen.current]
+                                             : nullptr;
+
+        if (_screen.current < _screen.capacity)
+        {
+            if (currentCb)
+                renderScreenToMainSprite(currentCb, _screen.current);
+            else
+                renderScreenToMainSprite(nullptr, _screen.current);
+            renderStatusBar();
+        }
+        else
+        {
+            const bool prevRender = _flags.inSpritePass;
+            pipcore::Sprite *prevActive = _render.activeSprite;
+            _flags.inSpritePass = 1;
+            _render.activeSprite = &_render.sprite;
+            clear(_render.bgColor565 ? _render.bgColor565 : static_cast<uint16_t>(_render.bgColor));
+            _render.activeSprite = prevActive;
+            _flags.inSpritePass = prevRender;
+        }
+    }
+
+    bool GUI::presentTransformedTiledFrame(float angleRad, float scale, uint32_t now, const char *stage)
+    {
+        if (!_disp.display || !_flags.spriteEnabled || !_flags.tiledMode)
+            return false;
+
+        const int16_t srcW = static_cast<int16_t>(_render.screenWidth);
+        const int16_t srcH = static_cast<int16_t>(_render.screenHeight);
+        const int16_t tileH = _render.sprite.height();
+        const int16_t stride = _render.sprite.width();
+        auto *tile = static_cast<uint16_t *>(_render.sprite.getBuffer());
+        if (!tile || srcW <= 0 || srcH <= 0 || tileH <= 0 || stride < srcW)
+            return false;
+
+        const uint16_t physW = _disp.display->width();
+        const uint16_t physH = _disp.display->height();
+        if (physW == 0 || physH == 0)
+            return false;
+
+        constexpr uint16_t rowCandidates[] = {96, 80, 64, 48, 32, 16, 8, 4, 1};
+        uint16_t rows = 0;
+        uint16_t lastTried = 0;
+        for (uint16_t candidate : rowCandidates)
+        {
+            const uint16_t tryRows = static_cast<uint16_t>((physH < candidate) ? physH : candidate);
+            if (tryRows == 0 || tryRows == lastTried)
+                continue;
+            lastTried = tryRows;
+            if (ensureRotationLineBuffer(static_cast<uint32_t>(physW) * tryRows))
+            {
+                rows = tryRows;
+                break;
+            }
+        }
+        if (rows == 0)
+            return false;
+
+        struct StreamingGuard
+        {
+            bool *flag;
+            ~StreamingGuard() noexcept
+            {
+                if (flag)
+                    *flag = false;
+            }
+        };
+        _rotationAnim.streamingFrame = true;
+        StreamingGuard streamingGuard{&_rotationAnim.streamingFrame};
+
+        const ClipState savedClip = _clip;
+        int32_t savedClipX = 0;
+        int32_t savedClipY = 0;
+        int32_t savedClipW = 0;
+        int32_t savedClipH = 0;
+        _render.sprite.getClipRect(&savedClipX, &savedClipY, &savedClipW, &savedClipH);
+        const int16_t savedOriginX = _render.originX;
+        const int16_t savedOriginY = _render.originY;
+        _clip.enabled = false;
+
+        const float safeScale = (scale < 0.08f) ? 0.08f : ((scale > 1.15f) ? 1.15f : scale);
+        const float invScale = 1.0f / safeScale;
+        const float cosA = cosf(angleRad);
+        const float sinA = sinf(angleRad);
+        const float srcCx = (static_cast<float>(srcW) - 1.0f) * 0.5f;
+        const float srcCy = (static_cast<float>(srcH) - 1.0f) * 0.5f;
+        const float dstCx = (static_cast<float>(physW) - 1.0f) * 0.5f;
+        const float dstCy = (static_cast<float>(physH) - 1.0f) * 0.5f;
+        const uint16_t bg = __builtin_bswap16(_render.bgColor565);
+
+        for (uint16_t outY = 0; outY < physH; outY = static_cast<uint16_t>(outY + rows))
+        {
+            const uint16_t chunkH = static_cast<uint16_t>(((physH - outY) < rows) ? (physH - outY) : rows);
+            uint16_t *out = _rotationAnim.lineBuf;
+            const uint32_t outPixels = static_cast<uint32_t>(physW) * chunkH;
+            for (uint32_t i = 0; i < outPixels; ++i)
+                out[i] = bg;
+
+            for (int16_t bandY = 0; bandY < srcH; bandY = static_cast<int16_t>(bandY + tileH))
+            {
+                const int16_t bandH = static_cast<int16_t>(std::min<int32_t>(tileH, static_cast<int32_t>(srcH) - bandY));
+                renderCurrentFrameToTileBand(bandY, bandH, now);
+
+                for (uint16_t row = 0; row < chunkH; ++row)
+                {
+                    const uint16_t y = static_cast<uint16_t>(outY + row);
+                    const float dy = (static_cast<float>(y) - dstCy) * invScale;
+                    float srcXf = (((0.0f - dstCx) * invScale) * cosA + dy * sinA) + srcCx;
+                    float srcYf = (-((0.0f - dstCx) * invScale) * sinA + dy * cosA) + srcCy;
+                    const float stepX = invScale * cosA;
+                    const float stepY = -invScale * sinA;
+                    uint16_t *dst = out + static_cast<uint32_t>(row) * physW;
+
+                    for (uint16_t x = 0; x < physW; ++x)
+                    {
+                        const int16_t sx = static_cast<int16_t>(lroundf(srcXf));
+                        const int16_t sy = static_cast<int16_t>(lroundf(srcYf));
+                        if (sx >= 0 && sx < srcW && sy >= bandY && sy < static_cast<int16_t>(bandY + bandH))
+                            dst[x] = tile[static_cast<size_t>(sy - bandY) * static_cast<size_t>(stride) + static_cast<size_t>(sx)];
+                        srcXf += stepX;
+                        srcYf += stepY;
+                    }
+                }
+            }
+
+            _disp.display->writeRect565(0,
+                                        static_cast<int16_t>(outY),
+                                        static_cast<int16_t>(physW),
+                                        static_cast<int16_t>(chunkH),
+                                        out,
+                                        physW);
+        }
+
+        _clip = savedClip;
+        _render.sprite.setClipRect(static_cast<int16_t>(savedClipX),
+                                   static_cast<int16_t>(savedClipY),
+                                   static_cast<int16_t>(savedClipW),
+                                   static_cast<int16_t>(savedClipH));
+        _render.originX = savedOriginX;
+        _render.originY = savedOriginY;
+        _dirty.count = 0;
+        _flags.dirtyRedrawPending = 0;
+
+        reportPlatformErrorOnce(stage);
+        pipcore::Platform *plat = pipcore::GetPlatform();
+        return !plat || plat->lastError() == pipcore::PlatformError::None;
     }
 
     void GUI::serviceAdaptivePreview(uint32_t now) noexcept
@@ -1053,15 +1632,44 @@ namespace pipgui
         const uint16_t targetW = static_cast<uint16_t>(lroundf(static_cast<float>(minW) + (static_cast<float>(maxW - minW) * pingPong)));
         const uint16_t targetH = static_cast<uint16_t>(lroundf(static_cast<float>(minH) + (static_cast<float>(maxH - minH) * pingPong)));
 
-        if (_render.screenWidth == targetW && _render.screenHeight == targetH)
+        const uint16_t prevW = _render.screenWidth;
+        const uint16_t prevH = _render.screenHeight;
+        if (prevW == targetW && prevH == targetH)
             return;
+
+        if ((_adaptivePreview.lastPresentedW == 0 || _adaptivePreview.lastPresentedH == 0) &&
+            prevW > 0 && prevH > 0)
+        {
+            _adaptivePreview.lastPresentedW = prevW;
+            _adaptivePreview.lastPresentedH = prevH;
+            const uint8_t delta = logicalRotationActive() ? logicalRotationDelta() : 0;
+            _adaptivePreview.lastOutputW = (delta & 1U) ? prevH : prevW;
+            _adaptivePreview.lastOutputH = (delta & 1U) ? prevW : prevH;
+        }
 
         _render.screenWidth = targetW;
         _render.screenHeight = targetH;
         Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-        _dirty.count = 0;
-        _flags.dirtyRedrawPending = 0;
-        _flags.needRedraw = 1;
+
+        if (_flags.tiledMode)
+        {
+            _dirty.count = 0;
+            if (targetW > 0 && targetH > 0)
+            {
+                const int16_t dirtyW = static_cast<int16_t>(targetW);
+                const int16_t dirtyH = static_cast<int16_t>(targetH);
+                if (_dirty.count < DIRTY_RECT_MAX)
+                    _dirty.rects[_dirty.count++] = {0, 0, dirtyW, dirtyH};
+            }
+            _flags.dirtyRedrawPending = (_dirty.count > 0) ? 1 : 0;
+            _flags.needRedraw = 1;
+        }
+        else
+        {
+            _dirty.count = 0;
+            _flags.dirtyRedrawPending = 0;
+            _flags.needRedraw = 1;
+        }
         Debug::clearRects();
     }
 
@@ -1079,11 +1687,106 @@ namespace pipgui
         if (!src || virtW == 0 || virtH == 0 || physW == 0 || physH == 0 || stride <= 0)
             return false;
 
+        if (logicalRotationActive())
+        {
+            const uint8_t delta = logicalRotationDelta() & 3U;
+            const uint16_t outW = (delta & 1U) ? virtH : virtW;
+            const uint16_t outH = (delta & 1U) ? virtW : virtH;
+            const uint16_t needLen = (physW > physH) ? physW : physH;
+
+            if (_adaptivePreview.lineBufCap < needLen)
+            {
+                pipcore::Platform *plat = platform();
+                uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
+                if (!newBuf)
+                {
+                    if (plat)
+                        (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
+                    newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+                }
+                if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                    newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(needLen) * sizeof(uint16_t), pipcore::AllocCaps::Default));
+                if (newBuf)
+                {
+                    freeAdaptivePreviewBuffer(plat);
+                    _adaptivePreview.lineBuf = newBuf;
+                    _adaptivePreview.lineBufCap = needLen;
+                }
+            }
+
+            if (!_adaptivePreview.lineBuf || _adaptivePreview.lineBufCap < needLen)
+                return false;
+
+            if (_adaptivePreview.lineBuf && _adaptivePreview.lineBufCap >= needLen)
+            {
+                const uint16_t bg = __builtin_bswap16(_render.bgColor565);
+                for (uint16_t x = 0; x < needLen; ++x)
+                    _adaptivePreview.lineBuf[x] = bg;
+
+                const uint16_t prevOutW = _adaptivePreview.lastOutputW;
+                const uint16_t prevOutH = _adaptivePreview.lastOutputH;
+                if (prevOutW > outW)
+                {
+                    const int16_t clearW = static_cast<int16_t>(prevOutW - outW);
+                    const int16_t clearH = static_cast<int16_t>((prevOutH > outH) ? prevOutH : outH);
+                    for (int16_t y = 0; y < clearH; ++y)
+                        _disp.display->writeRect565((int16_t)outW, y, clearW, 1, _adaptivePreview.lineBuf, clearW);
+                }
+                if (prevOutH > outH)
+                {
+                    const int16_t clearW = static_cast<int16_t>((prevOutW > outW) ? prevOutW : outW);
+                    const int16_t clearH = static_cast<int16_t>(prevOutH - outH);
+                    for (int16_t y = 0; y < clearH; ++y)
+                        _disp.display->writeRect565(0, (int16_t)(outH + y), clearW, 1, _adaptivePreview.lineBuf, clearW);
+                }
+
+                switch (delta)
+                {
+                case 1:
+                    for (uint16_t y = 0; y < virtW; ++y)
+                    {
+                        for (uint16_t x = 0; x < virtH; ++x)
+                            _adaptivePreview.lineBuf[x] = src[(size_t)(virtH - 1U - x) * (size_t)stride + y];
+                        _disp.display->writeRect565(0, (int16_t)y, (int16_t)virtH, 1, _adaptivePreview.lineBuf, virtH);
+                    }
+                    break;
+                case 2:
+                    for (uint16_t y = 0; y < virtH; ++y)
+                    {
+                        const uint16_t *srcRow = src + (size_t)(virtH - 1U - y) * (size_t)stride;
+                        for (uint16_t x = 0; x < virtW; ++x)
+                            _adaptivePreview.lineBuf[x] = srcRow[virtW - 1U - x];
+                        _disp.display->writeRect565(0, (int16_t)y, (int16_t)virtW, 1, _adaptivePreview.lineBuf, virtW);
+                    }
+                    break;
+                case 3:
+                    for (uint16_t y = 0; y < virtW; ++y)
+                    {
+                        const uint16_t srcX = static_cast<uint16_t>(virtW - 1U - y);
+                        for (uint16_t x = 0; x < virtH; ++x)
+                            _adaptivePreview.lineBuf[x] = src[(size_t)x * (size_t)stride + srcX];
+                        _disp.display->writeRect565(0, (int16_t)y, (int16_t)virtH, 1, _adaptivePreview.lineBuf, virtH);
+                    }
+                    break;
+                }
+            }
+
+            _adaptivePreview.lastPresentedW = virtW;
+            _adaptivePreview.lastPresentedH = virtH;
+            _adaptivePreview.lastOutputW = outW;
+            _adaptivePreview.lastOutputH = outH;
+            reportPlatformErrorOnce(stage);
+            pipcore::Platform *plat = pipcore::GetPlatform();
+            return !plat || plat->lastError() == pipcore::PlatformError::None;
+        }
+
         if (virtW == physW && virtH == physH)
         {
             _render.sprite.writeToDisplay(*_disp.display, 0, 0, (int16_t)physW, (int16_t)physH);
             _adaptivePreview.lastPresentedW = virtW;
             _adaptivePreview.lastPresentedH = virtH;
+            _adaptivePreview.lastOutputW = virtW;
+            _adaptivePreview.lastOutputH = virtH;
             reportPlatformErrorOnce(stage);
             pipcore::Platform *plat = pipcore::GetPlatform();
             return !plat || plat->lastError() == pipcore::PlatformError::None;
@@ -1094,7 +1797,13 @@ namespace pipgui
             pipcore::Platform *plat = platform();
             uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
             if (!newBuf)
+            {
+                if (plat)
+                    (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
                 newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+            }
+            if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default));
             if (newBuf)
             {
                 freeAdaptivePreviewBuffer(plat);
@@ -1143,14 +1852,11 @@ namespace pipgui
                 }
             }
         }
-        else
-        {
-            _disp.display->fillScreen565(_render.bgColor565);
-        }
-
         _disp.display->writeRect565(0, 0, (int16_t)virtW, (int16_t)virtH, src, stride);
         _adaptivePreview.lastPresentedW = virtW;
         _adaptivePreview.lastPresentedH = virtH;
+        _adaptivePreview.lastOutputW = virtW;
+        _adaptivePreview.lastOutputH = virtH;
 
         reportPlatformErrorOnce(stage);
         pipcore::Platform *plat = pipcore::GetPlatform();
@@ -1158,9 +1864,10 @@ namespace pipgui
     }
 
     bool GUI::presentTransformedSprite(const uint16_t *src, int16_t srcStride, int16_t srcW, int16_t srcH,
+                                       int16_t logicalW, int16_t logicalH,
                                        float angleRad, float scale, const char *stage)
     {
-        if (!_disp.display || !src || srcStride <= 0 || srcW <= 0 || srcH <= 0)
+        if (!_disp.display || !src || srcStride <= 0 || srcW <= 0 || srcH <= 0 || logicalW <= 0 || logicalH <= 0)
             return false;
 
         const uint16_t physW = _disp.display->width();
@@ -1173,10 +1880,16 @@ namespace pipgui
             pipcore::Platform *plat = platform();
             uint16_t *newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal)) : nullptr;
             if (!newBuf)
+            {
+                if (plat)
+                    (void)detail::recoverFromAllocFailure(plat, static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::PreferInternal);
                 newBuf = plat ? static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default)) : nullptr;
+            }
+            if (!newBuf && plat && detail::recoverFromAllocFailure(plat, static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default))
+                newBuf = static_cast<uint16_t *>(plat->alloc(static_cast<size_t>(physW) * sizeof(uint16_t), pipcore::AllocCaps::Default));
             if (newBuf)
             {
-                freeRotationBuffer(plat);
+                freeRotationLineBuffer(plat);
                 _rotationAnim.lineBuf = newBuf;
                 _rotationAnim.lineBufCap = physW;
             }
@@ -1189,11 +1902,13 @@ namespace pipgui
         const float invScale = 1.0f / safeScale;
         const float cosA = cosf(angleRad);
         const float sinA = sinf(angleRad);
-        const float srcCx = ((float)srcW - 1.0f) * 0.5f;
-        const float srcCy = ((float)srcH - 1.0f) * 0.5f;
+        const float srcCx = ((float)logicalW - 1.0f) * 0.5f;
+        const float srcCy = ((float)logicalH - 1.0f) * 0.5f;
         const float dstCx = ((float)physW - 1.0f) * 0.5f;
         const float dstCy = ((float)physH - 1.0f) * 0.5f;
         const uint16_t bg = __builtin_bswap16(_render.bgColor565);
+        const float sampleScaleX = (logicalW > 1 && srcW > 1) ? ((float)(srcW - 1) / (float)(logicalW - 1)) : 1.0f;
+        const float sampleScaleY = (logicalH > 1 && srcH > 1) ? ((float)(srcH - 1) / (float)(logicalH - 1)) : 1.0f;
 
         for (uint16_t x = 0; x < physW; ++x)
             _rotationAnim.lineBuf[x] = bg;
@@ -1207,12 +1922,16 @@ namespace pipgui
             const float stepY = -invScale * sinA;
             for (uint16_t x = 0; x < physW; ++x)
             {
-                const int16_t srcXi = (int16_t)lroundf(srcXf);
-                const int16_t srcYi = (int16_t)lroundf(srcYf);
-                if (srcXi < 0 || srcYi < 0 || srcXi >= srcW || srcYi >= srcH)
+                const int16_t logicalXi = (int16_t)lroundf(srcXf);
+                const int16_t logicalYi = (int16_t)lroundf(srcYf);
+                if (logicalXi < 0 || logicalYi < 0 || logicalXi >= logicalW || logicalYi >= logicalH)
                     _rotationAnim.lineBuf[x] = bg;
                 else
+                {
+                    const int16_t srcXi = static_cast<int16_t>(lroundf((float)logicalXi * sampleScaleX));
+                    const int16_t srcYi = static_cast<int16_t>(lroundf((float)logicalYi * sampleScaleY));
                     _rotationAnim.lineBuf[x] = src[(size_t)srcYi * (size_t)srcStride + (size_t)srcXi];
+                }
                 srcXf += stepX;
                 srcYf += stepY;
             }
@@ -1225,20 +1944,86 @@ namespace pipgui
         return !plat || plat->lastError() == pipcore::PlatformError::None;
     }
 
-    bool GUI::applyLogicalRotation(uint8_t rotation)
+    bool GUI::applyLogicalRotation(uint8_t rotation, bool allowAutoTiledFallback)
     {
+        const uint8_t prevRotation = _disp.rotation;
+        const uint16_t prevScreenW = _render.screenWidth;
+        const uint16_t prevScreenH = _render.screenHeight;
+        const bool wasTiled = _flags.tiledMode != 0;
+        const bool wasAutoTiled = _flags.autoTiledMode != 0;
+
+        const auto tryCreateCanvas = [&](uint16_t screenW, uint16_t screenH, bool tiled, bool autoTiled) noexcept -> bool
+        {
+            _render.sprite.deleteSprite();
+            _flags.tiledMode = 0;
+            _flags.autoTiledMode = 0;
+
+            const int16_t sw = static_cast<int16_t>(screenW);
+            const int16_t sh = static_cast<int16_t>(screenH);
+            const int16_t targetH = tiled ? ((sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh) : sh;
+            const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
+            bool ok = false;
+            if (!tiled)
+                ok = _render.sprite.createSprite(sw, sh);
+            else
+            {
+                ok = _render.sprite.createSprite(sw, targetH);
+            }
+
+            if (!ok)
+            {
+                pipcore::Platform *plat = platform();
+                if (plat && bytes > 0 && detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default))
+                {
+                    if (!tiled)
+                        ok = _render.sprite.createSprite(sw, sh);
+                    else
+                        ok = _render.sprite.createSprite(sw, targetH);
+                }
+            }
+
+            _flags.tiledMode = (ok && tiled) ? 1U : 0U;
+            _flags.autoTiledMode = (ok && tiled && autoTiled) ? 1U : 0U;
+
+            _flags.spriteEnabled = ok ? 1U : 0U;
+            _render.activeSprite = _flags.spriteEnabled ? &_render.sprite : nullptr;
+            return ok;
+        };
+
+        const auto recreateCanvas = [&](uint16_t screenW, uint16_t screenH, bool preferTiled) noexcept -> bool
+        {
+            if (preferTiled && !wasAutoTiled)
+                return tryCreateCanvas(screenW, screenH, true, false);
+
+            if (tryCreateCanvas(screenW, screenH, preferTiled, preferTiled && wasAutoTiled))
+                return true;
+            if (allowAutoTiledFallback && tryCreateCanvas(screenW, screenH, !preferTiled, !preferTiled))
+                return true;
+            return false;
+        };
+
         _disp.rotation = rotation & 3U;
         const bool quarterTurn = (((_disp.rotation - _disp.physicalRotation) & 1U) != 0U);
-        _render.screenWidth = quarterTurn ? _render.physicalHeight : _render.physicalWidth;
-        _render.screenHeight = quarterTurn ? _render.physicalWidth : _render.physicalHeight;
-        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
+        const uint16_t targetW = quarterTurn ? _render.physicalHeight : _render.physicalWidth;
+        const uint16_t targetH = quarterTurn ? _render.physicalWidth : _render.physicalHeight;
 
-        _render.sprite.deleteSprite();
-        _flags.spriteEnabled = _render.sprite.createSprite((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-        _render.activeSprite = _flags.spriteEnabled ? &_render.sprite : nullptr;
+        if (!recreateCanvas(targetW, targetH, wasTiled))
+        {
+            _disp.rotation = prevRotation;
+            _render.screenWidth = prevScreenW;
+            _render.screenHeight = prevScreenH;
+            Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
+            (void)recreateCanvas(prevScreenW, prevScreenH, wasTiled);
+            _flags.autoTiledMode = wasAutoTiled ? 1U : 0U;
+            return false;
+        }
+
+        _render.screenWidth = targetW;
+        _render.screenHeight = targetH;
+        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
         _clip = {};
         _dirty.count = 0;
-        return _flags.spriteEnabled;
+        return true;
     }
 
     void GUI::setRotation(uint8_t rotation, uint32_t durationMs)
@@ -1249,6 +2034,8 @@ namespace pipgui
         {
             _rotationAnim.active = false;
             _rotationAnim.switched = false;
+            _rotationAnim.startedTiled = false;
+            _rotationAnim.startedAutoTiled = false;
             freeRotationBuffer(platform());
         }
 
@@ -1267,45 +2054,53 @@ namespace pipgui
         if (_disp.rotation == rotation)
             return;
 
-        const uint16_t *src = static_cast<const uint16_t *>(_render.sprite.getBuffer());
-        const int16_t stride = _render.sprite.width();
-        const int16_t height = _render.sprite.height();
-        const size_t bytes = (src && stride > 0 && height > 0)
-                                 ? (size_t)stride * (size_t)height * sizeof(uint16_t)
-                                 : 0;
-
+        const bool startedTiled = _flags.tiledMode != 0;
+        const bool startedAutoTiled = _flags.autoTiledMode != 0;
         pipcore::Platform *plat = platform();
-        uint16_t *snapshot = nullptr;
-        if (bytes > 0 && plat)
+
+        if (startedTiled)
         {
-            snapshot = static_cast<uint16_t *>(plat->alloc(bytes, pipcore::AllocCaps::Default));
-            if (snapshot)
-                memcpy(snapshot, src, bytes);
+            freeScreenshotStream(plat);
+            freeBlurBuffers(plat);
+            freeRotationLineBuffer(plat);
+            (void)releaseGraphCachesForRecovery(plat);
         }
 
-        const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
-                                             ? _screen.callbacks[_screen.current]
-                                             : nullptr;
-
-        if (_screen.current < _screen.capacity)
+        if (!startedTiled)
         {
-            if (currentCb)
-                renderScreenToMainSprite(currentCb, _screen.current);
+            const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
+                                                 ? _screen.callbacks[_screen.current]
+                                                 : nullptr;
+
+            if (_screen.current < _screen.capacity)
+            {
+                if (currentCb)
+                    renderScreenToMainSprite(currentCb, _screen.current);
+                else
+                    clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                renderStatusBar();
+            }
             else
+            {
                 clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
-            renderStatusBar();
+            }
+        }
+
+        if (!_render.sprite.getBuffer())
+        {
+            if (applyLogicalRotation(rotation))
+                requestRedraw();
+            return;
         }
 
         _rotationAnim.active = true;
         _rotationAnim.switched = false;
+        _rotationAnim.startedTiled = startedTiled;
+        _rotationAnim.startedAutoTiled = startedAutoTiled;
         _rotationAnim.from = _disp.rotation;
         _rotationAnim.to = rotation;
         _rotationAnim.startMs = nowMs();
         _rotationAnim.durationMs = durationMs ? durationMs : 520;
-        _rotationAnim.snapshot = snapshot;
-        _rotationAnim.snapshotW = (uint16_t)_render.screenWidth;
-        _rotationAnim.snapshotH = (uint16_t)_render.screenHeight;
-        _rotationAnim.snapshotStride = (uint16_t)stride;
         _dirty.count = 0;
         _flags.dirtyRedrawPending = 0;
         _flags.needRedraw = 0;
@@ -1331,36 +2126,54 @@ namespace pipgui
         const bool switchedThisFrame = (!_rotationAnim.switched && t >= 0.5f);
         if (!_rotationAnim.switched && t >= 0.5f)
         {
-            if (!applyLogicalRotation(_rotationAnim.to))
+            if (!applyLogicalRotation(_rotationAnim.to, false))
             {
+                const bool restoreForcedTiled = _rotationAnim.startedTiled && !_rotationAnim.startedAutoTiled;
                 _rotationAnim.active = false;
                 _rotationAnim.switched = false;
+                _rotationAnim.startedTiled = false;
+                _rotationAnim.startedAutoTiled = false;
                 freeRotationBuffer(platform());
+                if (restoreForcedTiled)
+                {
+                    const int16_t sw = static_cast<int16_t>(_render.screenWidth);
+                    const int16_t sh = static_cast<int16_t>(_render.screenHeight);
+                    const int16_t tileH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
+                    _render.sprite.deleteSprite();
+                    const bool ok = _render.sprite.createSprite(sw, tileH);
+                    _flags.spriteEnabled = ok ? 1U : 0U;
+                    _flags.tiledMode = ok ? 1U : 0U;
+                    _flags.autoTiledMode = 0;
+                    _render.activeSprite = ok ? &_render.sprite : nullptr;
+                }
                 requestRedraw();
                 return;
             }
 
             _rotationAnim.switched = true;
 
-            const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
-                                                 ? _screen.callbacks[_screen.current]
-                                                 : nullptr;
+            if (!_flags.tiledMode)
+            {
+                const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
+                                                     ? _screen.callbacks[_screen.current]
+                                                     : nullptr;
 
-            if (_screen.current < _screen.capacity)
-            {
-                if (currentCb)
-                    renderScreenToMainSprite(currentCb, _screen.current);
+                if (_screen.current < _screen.capacity)
+                {
+                    if (currentCb)
+                        renderScreenToMainSprite(currentCb, _screen.current);
+                    else
+                        clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                    renderStatusBar();
+                }
                 else
+                {
                     clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
-                renderStatusBar();
-            }
-            else
-            {
-                clear(_render.bgColor565 ? _render.bgColor565 : (uint16_t)_render.bgColor);
+                }
             }
         }
 
-        const bool shouldRenderLiveFrame = (_rotationAnim.switched && !switchedThisFrame);
+        const bool shouldRenderLiveFrame = (_rotationAnim.switched && !switchedThisFrame && !_flags.tiledMode);
         const ScreenCallback currentCb = (_screen.current < _screen.capacity && _screen.callbacks)
                                              ? _screen.callbacks[_screen.current]
                                              : nullptr;
@@ -1385,31 +2198,67 @@ namespace pipgui
         const float angle = startAngle + (deltaAngle * eased);
         const float scale = 1.0f - (0.10f * sinf(t * 3.1415926535f));
 
-        const uint16_t *src = (!_rotationAnim.switched || switchedThisFrame) && _rotationAnim.snapshot
-                                  ? _rotationAnim.snapshot
-                                  : static_cast<const uint16_t *>(_render.sprite.getBuffer());
-        const int16_t srcStride = ((!_rotationAnim.switched || switchedThisFrame) && _rotationAnim.snapshot)
-                                      ? (int16_t)_rotationAnim.snapshotStride
-                                      : _render.sprite.width();
-        const int16_t srcW = ((!_rotationAnim.switched || switchedThisFrame) && _rotationAnim.snapshot)
-                                 ? (int16_t)_rotationAnim.snapshotW
-                                 : (int16_t)_render.screenWidth;
-        const int16_t srcH = ((!_rotationAnim.switched || switchedThisFrame) && _rotationAnim.snapshot)
-                                 ? (int16_t)_rotationAnim.snapshotH
-                                 : (int16_t)_render.screenHeight;
-        (void)presentTransformedSprite(src,
-                                       srcStride,
-                                       srcW,
-                                       srcH,
-                                       angle,
-                                       scale,
-                                       "present");
+        bool presented = false;
+        if (_flags.tiledMode)
+        {
+            presented = presentTransformedTiledFrame(angle, scale, now, "present");
+        }
+        else
+        {
+            const uint16_t *src = static_cast<const uint16_t *>(_render.sprite.getBuffer());
+            const int16_t srcStride = _render.sprite.width();
+            const int16_t srcW = static_cast<int16_t>(_render.screenWidth);
+            const int16_t srcH = static_cast<int16_t>(_render.screenHeight);
+            const int16_t logicalW = static_cast<int16_t>(_render.screenWidth);
+            const int16_t logicalH = static_cast<int16_t>(_render.screenHeight);
+            presented = presentTransformedSprite(src,
+                                                 srcStride,
+                                                 srcW,
+                                                 srcH,
+                                                 logicalW,
+                                                 logicalH,
+                                                 angle,
+                                                 scale,
+                                                 "present");
+        }
 
-        if (elapsed >= duration)
+        if (!presented)
         {
             _rotationAnim.active = false;
             _rotationAnim.switched = false;
             freeRotationBuffer(platform());
+            if (_disp.rotation != _rotationAnim.to)
+                (void)applyLogicalRotation(_rotationAnim.to);
+            requestRedraw();
+            return;
+        }
+
+        if (elapsed >= duration)
+        {
+            const bool restoreForcedTiled = _rotationAnim.startedTiled && !_rotationAnim.startedAutoTiled && !_flags.tiledMode;
+            _rotationAnim.active = false;
+            _rotationAnim.switched = false;
+            freeRotationBuffer(platform());
+            if (restoreForcedTiled)
+            {
+                const int16_t sw = static_cast<int16_t>(_render.screenWidth);
+                const int16_t sh = static_cast<int16_t>(_render.screenHeight);
+                const int16_t tileH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
+                _render.sprite.deleteSprite();
+                bool ok = _render.sprite.createSprite(sw, tileH);
+                if (!ok)
+                {
+                    pipcore::Platform *plat = platform();
+                    const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(tileH) * sizeof(uint16_t);
+                    if (plat && bytes > 0 && detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default))
+                        ok = _render.sprite.createSprite(sw, tileH);
+                }
+                _flags.spriteEnabled = ok ? 1U : 0U;
+                _flags.tiledMode = ok ? 1U : 0U;
+                _flags.autoTiledMode = 0;
+                _render.activeSprite = ok ? &_render.sprite : nullptr;
+                _clip = {};
+            }
             _dirty.count = 0;
             _flags.dirtyRedrawPending = 0;
             _flags.needRedraw = 1;

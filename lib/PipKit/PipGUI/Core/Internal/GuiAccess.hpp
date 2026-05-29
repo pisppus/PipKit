@@ -62,19 +62,9 @@ namespace pipgui
                 return gui.getTile(screenId);
             }
 
-            static void handleListInput(GUI &gui, uint8_t screenId, const GUI::InputState &input)
-            {
-                gui.handleListInput(screenId, input);
-            }
-
             static bool updateListScreen(GUI &gui, uint8_t screenId)
             {
                 return gui.updateListScreen(screenId);
-            }
-
-            static void handleTileInput(GUI &gui, uint8_t screenId, const GUI::InputState &input)
-            {
-                gui.handleTileInput(screenId, input);
             }
 
             static void renderTileScreen(GUI &gui, uint8_t screenId)
@@ -937,6 +927,25 @@ namespace pipgui
                                            TextAlign align)
             {
                 return gui.drawTextEllipsized(text, x, y, maxWidth, fg565, align);
+            }
+
+            static bool drawTextBox(GUI &gui,
+                                    const String &text,
+                                    int16_t x,
+                                    int16_t y,
+                                    int16_t w,
+                                    int16_t h,
+                                    uint16_t fg565,
+                                    uint16_t bg565,
+                                    TextAlign align,
+                                    int16_t lineGap)
+            {
+                return gui.drawTextBox(text, x, y, w, h, fg565, bg565, align, lineGap);
+            }
+
+            static bool measureText(GUI &gui, const String &text, int16_t &outW, int16_t &outH)
+            {
+                return gui.measureText(text, outW, outH);
             }
 
             static void drawIcon(GUI &gui,

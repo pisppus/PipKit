@@ -61,16 +61,18 @@ namespace pipgui
     inline UpdateTextFluent GUI::updateText() { return UpdateTextFluent(this); }
     inline DrawTextMarqueeFluent GUI::drawTextMarquee() { return DrawTextMarqueeFluent(this); }
     inline DrawTextEllipsizedFluent GUI::drawTextEllipsized() { return DrawTextEllipsizedFluent(this); }
+    inline DrawTextBoxFluent GUI::drawTextBox() { return DrawTextBoxFluent(this); }
 
     inline ConfigStatusBarFluent GUI::configStatusBar() { return ConfigStatusBarFluent(this); }
     inline SetStatusBarTextFluent GUI::setStatusBarText() { return SetStatusBarTextFluent(this); }
     inline SetStatusBarIconFluent GUI::setStatusBarIcon() { return SetStatusBarIconFluent(this); }
 
     inline UpdateListFluent GUI::updateList() { return UpdateListFluent(this); }
-    inline ListInputFluent GUI::listInput() { return ListInputFluent(this); }
+    inline BindNavFluent GUI::nav() { return BindNavFluent(this); }
+    inline UseListNavFluent GUI::listNav() { return UseListNavFluent(this); }
 
     inline UpdateTileFluent GUI::updateTile() { return UpdateTileFluent(this); }
-    inline TileInputFluent GUI::tileInput() { return TileInputFluent(this); }
+    inline UseTileNavFluent GUI::tileNav() { return UseTileNavFluent(this); }
     inline ConfigureBacklightFluent GUI::setBacklight() { return ConfigureBacklightFluent(this); }
     inline SetClipFluent GUI::setClip() { return SetClipFluent(this); }
     inline ShowLogoFluent GUI::showLogo() { return ShowLogoFluent(this); }

@@ -4,10 +4,35 @@ namespace pipgui
 {
     namespace
     {
+        inline constexpr uint16_t kStyleBaseShortSidePx = 240;
+        inline constexpr uint16_t kStyleBaseLongSidePx = 320;
         inline constexpr uint16_t kStyleH1Px = 24;
         inline constexpr uint16_t kStyleH2Px = 18;
         inline constexpr uint16_t kStyleBodyPx = 14;
         inline constexpr uint16_t kStyleCaptionPx = 12;
+
+        [[nodiscard]] uint16_t scaleTextStylePx(uint16_t nominalPx, uint16_t screenW, uint16_t screenH) noexcept
+        {
+            if (nominalPx == 0 || screenW == 0 || screenH == 0)
+                return nominalPx;
+
+            const uint16_t shortSide = (screenW < screenH) ? screenW : screenH;
+            const uint16_t longSide = (screenW < screenH) ? screenH : screenW;
+
+            const float shortScale = static_cast<float>(shortSide) / static_cast<float>(kStyleBaseShortSidePx);
+            const float longScale = static_cast<float>(longSide) / static_cast<float>(kStyleBaseLongSidePx);
+            float scale = sqrtf(shortScale * longScale);
+
+            if (scale < 0.50f)
+                scale = 0.50f;
+            else if (scale > 2.50f)
+                scale = 2.50f;
+
+            uint16_t scaled = static_cast<uint16_t>(lroundf(static_cast<float>(nominalPx) * scale));
+            if (scaled < 8)
+                scaled = 8;
+            return scaled;
+        }
     }
 
     static const FontData fontWixMadeForDisplay = {
@@ -82,6 +107,7 @@ namespace pipgui
             px = kStyleH2Px;
         else if (style == Caption)
             px = kStyleCaptionPx;
+        px = scaleTextStylePx(px, _render.screenWidth, _render.screenHeight);
         setFontSize(px);
     }
 

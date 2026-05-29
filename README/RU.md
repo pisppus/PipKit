@@ -1,20 +1,21 @@
-# PipKit
+<p align="center">
+  <img src="./hero.png" alt="PipKit Framework" width="100%">
+</p>
 
-[English](../README.md) &nbsp;&nbsp; [Українська](UA.md) &nbsp;&nbsp; **Русский**<br>
-<sup>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▔▔▔▔</sup>
+<p align="center">
+  <a href="../README.md">English</a> &nbsp;&nbsp; <a href="UA.md">Українська</a> &nbsp;&nbsp; <strong>Русский</strong><br>
+  <sup>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▔▔▔▔</sup>
+</p>
 
-<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; margin-bottom:20px;">
-<img width="320" height="240" alt="pipgui_20260518_210632_493" src="https://github.com/user-attachments/assets/dc04b46a-7f7c-4d45-a705-28cbaec0a135" />
-<img width="320" height="240" alt="pipgui_20260518_215506_794" src="https://github.com/user-attachments/assets/33f95e58-4bda-49f1-a294-2c1ead69dfd8" />
-<img width="320" height="240" alt="pipgui_20260518_215420_793" src="https://github.com/user-attachments/assets/22e9d015-acef-40a1-a9bf-0c9a01e95fdb" />
-<img width="320" height="240" alt="pipgui_20260518_214628_704" src="https://github.com/user-attachments/assets/323da964-b02b-4f63-a568-3fcf0703e151" />
-<img width="320" height="240" alt="pipgui_20260517_140803_213" src="https://github.com/user-attachments/assets/b40a2743-4d77-4120-9c43-a23fc3131010" />
-<img width="320" height="240" alt="pipgui_20260518_214455_446" src="https://github.com/user-attachments/assets/839aea0f-0c97-45bb-8aff-904a4dcd1414" />
+PipKit — это легковесный, декларативный и быстрый GUI-фреймворк на C++17, разработанный специально для встраиваемых систем с ограниченными ресурсами. Проект следует строгому принципу YAGNI, обеспечивая максимальную производительность и насыщенные визуальные интерфейсы.
 
-</div>
+Фреймворк предоставляет API в стиле SwiftUI для построения структуры интерфейса с минимальным количеством шаблонного кода. Благодаря использованию шрифтов Signed Distance Fields (PSDF), PipKit динамически масштабирует текст до любого размера с высокой четкостью граней и минимальным расходом памяти. При нехватке оперативной памяти движок рендеринга автоматически переходит на инкрементальный двухтайловый конвейер. Также в проект входит кроссплатформенный ПК-симулятор для быстрой разработки интерфейса на Windows и встроенный инструментарий, включая безопасные OTA-обновления с подписью и захват скриншотов.
 
-Embedded UI-фреймворк для ESP-проектов.<br>
-Создан для насыщенных интерфейсов на ограниченном железе, с поддержкой шрифтов, виджетов, эффектов, анимаций, спрайтов, кэширования и инкрементального dirty-rect рендеринга.
+<p align="center">
+  <strong>Ресурсы</strong>&emsp;&emsp;&emsp;<strong>Модуль</strong><br>
+  &ensp;&ensp;<a href="https://pisppus.is-a.dev/docs/pipkit">Доки</a>&emsp;&emsp;&emsp;&emsp;&ensp;<a href="https://github.com/pisppus/PipCore">PipCore</a>
+</p>
 
-**Ресурсы**&emsp;&emsp;&emsp;&emsp;**Модуль**<br>
-&ensp;[Доки](https://pisppus.is-a.dev/docs/pipkit)&emsp;&emsp;&emsp;&emsp;&ensp;&ensp;[PipCore](https://github.com/pisppus/PipCore)
+<p align="center">
+  Распространяется под лицензией MIT.
+</p>

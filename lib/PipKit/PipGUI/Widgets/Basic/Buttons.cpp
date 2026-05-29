@@ -378,7 +378,35 @@ namespace pipgui
             const uint16_t progressFill = static_cast<uint16_t>(detail::blend565(bg, state.progressFillColor, state.fadeLevel));
             const int16_t progressW = progressWidthForValue(frame.w, state.progressValue);
             if (progressW > 0)
-                drawSquircleRect().pos(frame.x, frame.y).size(progressW, frame.h).radius((uint8_t)frame.radius).fill(progressFill);
+            {
+                pipcore::Sprite *target = getDrawTarget();
+                int32_t prevClipX = 0;
+                int32_t prevClipY = 0;
+                int32_t prevClipW = 0;
+                int32_t prevClipH = 0;
+                const ClipState prevGuiClip = _clip;
+
+                target->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
+                const int16_t clipLocalX = static_cast<int16_t>(frame.x - _render.originX);
+                const int16_t clipLocalY = static_cast<int16_t>(frame.y - _render.originY);
+                const int32_t clipX1 = max<int32_t>(prevClipX, clipLocalX);
+                const int32_t clipY1 = max<int32_t>(prevClipY, clipLocalY);
+                const int32_t clipX2 = min<int32_t>(prevClipX + prevClipW, static_cast<int32_t>(clipLocalX) + progressW);
+                const int32_t clipY2 = min<int32_t>(prevClipY + prevClipH, static_cast<int32_t>(clipLocalY) + frame.h);
+                if (clipX2 > clipX1 && clipY2 > clipY1)
+                {
+                    applyClip(frame.x, frame.y, progressW, frame.h);
+                    target->setClipRect(static_cast<int16_t>(clipX1),
+                                        static_cast<int16_t>(clipY1),
+                                        static_cast<int16_t>(clipX2 - clipX1),
+                                        static_cast<int16_t>(clipY2 - clipY1));
+
+                    drawSquircleRect().pos(frame.x, frame.y).size(frame.w, frame.h).radius((uint8_t)frame.radius).fill(progressFill);
+
+                    _clip = prevGuiClip;
+                    target->setClipRect(prevClipX, prevClipY, prevClipW, prevClipH);
+                }
+            }
         }
 
         const uint16_t fgActive = detail::autoTextColor(bg, 140);

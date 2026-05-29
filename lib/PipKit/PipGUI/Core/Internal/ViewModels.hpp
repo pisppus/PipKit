@@ -120,14 +120,6 @@ namespace pipgui
         float targetScroll = 0.0f;
         float scrollVel = 0.0f;
 
-        uint32_t nextHoldStartMs = 0;
-        uint32_t prevHoldStartMs = 0;
-        bool nextLongFired = false;
-        bool prevLongFired = false;
-        bool lastNextDown = false;
-        bool lastPrevDown = false;
-        bool lastSelectDown = false;
-
         ListStyle style;
 
         uint8_t scrollbarAlpha = 0;
@@ -167,14 +159,6 @@ namespace pipgui
         bool configured = false;
         uint8_t itemCount = 0;
         uint8_t selectedIndex = 0;
-
-        uint32_t nextHoldStartMs = 0;
-        uint32_t prevHoldStartMs = 0;
-        bool nextLongFired = false;
-        bool prevLongFired = false;
-        bool lastNextDown = false;
-        bool lastPrevDown = false;
-        bool lastSelectDown = false;
         uint32_t marqueeStartMs = 0;
 
         TileStyle style;

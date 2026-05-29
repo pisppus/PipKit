@@ -146,7 +146,7 @@ namespace pipgui::screenshots::detail
 
     inline constexpr const char *kRootDir = "/PipKit";
     inline constexpr const char *kShotsDir = "/PipKit/screenshots";
-    inline constexpr const char *kThumbsDir = "/PipKit/thumbnails";
+    inline constexpr const char *kThumbsDir = "/PipKit/thumbnails_cover";
 
     [[nodiscard]] inline bool hasSuffix(const char *s, const char *suffix) noexcept
     {

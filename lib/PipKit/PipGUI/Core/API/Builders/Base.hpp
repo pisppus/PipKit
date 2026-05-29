@@ -23,6 +23,7 @@ namespace pipgui
     namespace detail
     {
         pipcore::Platform *resolvePlatform(GUI *gui) noexcept;
+        [[nodiscard]] bool recoverFromAllocFailure(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept;
 
         [[nodiscard]] inline void *alloc(pipcore::Platform *plat, size_t bytes, pipcore::AllocCaps caps) noexcept
         {
@@ -32,8 +33,20 @@ namespace pipgui
             void *ptr = p->alloc(bytes, caps);
             if (ptr)
                 return ptr;
+            if (recoverFromAllocFailure(p, bytes, caps))
+            {
+                ptr = p->alloc(bytes, caps);
+                if (ptr)
+                    return ptr;
+            }
             if (caps != pipcore::AllocCaps::Default)
-                return p->alloc(bytes, pipcore::AllocCaps::Default);
+            {
+                ptr = p->alloc(bytes, pipcore::AllocCaps::Default);
+                if (ptr)
+                    return ptr;
+                if (recoverFromAllocFailure(p, bytes, pipcore::AllocCaps::Default))
+                    return p->alloc(bytes, pipcore::AllocCaps::Default);
+            }
             return nullptr;
         }
 

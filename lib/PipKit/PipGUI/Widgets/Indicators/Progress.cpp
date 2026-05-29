@@ -17,7 +17,7 @@ namespace pipgui
         constexpr float kCircleProgressStartDeg = 0.0f;
         constexpr float kCircleProgressGapVisibleDeg = 12.0f;
         constexpr float kCircleProgressGapMinDeg = 20.0f;
-        constexpr float kCircleProgressGapMaxDeg = 42.0f;
+        constexpr float kCircleProgressGapMaxDeg = 78.0f;
 
         struct CircularProgressShimmerShader
         {
@@ -295,8 +295,52 @@ namespace pipgui
         if (fillRight <= fillLeft)
             return;
 
-        const int16_t fillW = fillRight - fillLeft;
-        fillRoundRect(fillLeft, y, fillW, h, clampRoundRadius(fillW, h, rounded), fillColor);
+        pipcore::Sprite *target = getDrawTarget();
+        if (!target)
+            return;
+
+        int32_t prevClipX = 0;
+        int32_t prevClipY = 0;
+        int32_t prevClipW = 0;
+        int32_t prevClipH = 0;
+        target->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
+
+        const int16_t ox = _render.originX;
+        const int16_t oy = _render.originY;
+        const int16_t visibleW = static_cast<int16_t>(fillRight - fillLeft);
+        const int16_t clipLocalX = static_cast<int16_t>(fillLeft - ox);
+        const int16_t clipLocalY = static_cast<int16_t>(y - oy);
+        const int32_t clipX1 = max<int32_t>(prevClipX, clipLocalX);
+        const int32_t clipY1 = max<int32_t>(prevClipY, clipLocalY);
+        const int32_t clipX2 = min<int32_t>(prevClipX + prevClipW, static_cast<int32_t>(clipLocalX) + visibleW);
+        const int32_t clipY2 = min<int32_t>(prevClipY + prevClipH, static_cast<int32_t>(clipLocalY) + h);
+        if (clipX2 <= clipX1 || clipY2 <= clipY1)
+            return;
+
+        const ClipState prevGuiClip = _clip;
+        applyClip(fillLeft, y, visibleW, h);
+        target->setClipRect(static_cast<int16_t>(clipX1),
+                            static_cast<int16_t>(clipY1),
+                            static_cast<int16_t>(clipX2 - clipX1),
+                            static_cast<int16_t>(clipY2 - clipY1));
+
+        int16_t drawX = x;
+        int16_t drawW = w;
+        if (fillLeft > x)
+        {
+            const int16_t minCapW = static_cast<int16_t>(rounded * 2);
+            drawX = fillLeft;
+            drawW = visibleW;
+            if (minCapW > 0 && drawW < minCapW)
+                drawW = minCapW;
+            if (drawW < h)
+                drawW = h;
+        }
+
+        fillRoundRect(drawX, y, drawW, h, rounded, fillColor);
+
+        _clip = prevGuiClip;
+        target->setClipRect(prevClipX, prevClipY, prevClipW, prevClipH);
     }
 
     void GUI::drawProgress(int16_t x, int16_t y,

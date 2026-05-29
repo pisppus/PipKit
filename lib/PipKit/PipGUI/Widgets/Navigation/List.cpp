@@ -99,10 +99,6 @@ namespace pipgui
     {
         menu.selectedIndex = 0;
         menu.scrollPos = menu.targetScroll = menu.scrollVel = 0.0f;
-        menu.nextHoldStartMs = menu.prevHoldStartMs = 0;
-        menu.nextLongFired = menu.prevLongFired = false;
-        menu.lastNextDown = menu.lastPrevDown = false;
-        menu.lastSelectDown = false;
         menu.scrollbarAlpha = 0;
         menu.marqueeStartMs = 0;
         menu.lastScrollActivityMs = menu.lastUpdateMs = 0;
@@ -198,123 +194,77 @@ namespace pipgui
             detail::GuiAccess::updateListScreen(*_gui, screenId);
     }
 
-    void GUI::handleListInput(uint8_t screenId, const InputState &input)
+    bool GUI::handleListNavEvent(GUI &gui, const NavEvent &event, void *)
     {
-        const bool nextDown = input.nextDown;
-        const bool prevDown = input.prevDown;
-        const bool selectDown = input.hasSelect ? input.selectDown : false;
-
-        ListState *menuPtr = getList(screenId);
+        ListState *menuPtr = gui.getList(event.screenId);
         if (!menuPtr)
-            return;
+            return false;
         ListState &menu = *menuPtr;
         if (!menu.configured || menu.itemCount == 0)
-            return;
+            return false;
 
-#if PIPGUI_SCREENSHOTS
-        if (nextDown && prevDown)
-        {
-            menu.nextHoldStartMs = 0;
-            menu.prevHoldStartMs = 0;
-            menu.nextLongFired = false;
-            menu.prevLongFired = false;
-            menu.lastNextDown = false;
-            menu.lastPrevDown = false;
-            menu.lastSelectDown = false;
-            return;
-        }
-#endif
-
-        const uint32_t now = nowMs();
+        const uint32_t now = event.nowMs;
         bool changed = false;
-        const uint32_t holdMs = 400;
-        const bool selectPressed = input.hasSelect && selectDown && !menu.lastSelectDown;
 
-        if (selectPressed)
+        switch (event.button)
         {
-            if (menu.selectedIndex < menu.itemCount)
+        case NavButton::Next:
+            if (event.code == NavEventCode::LongPressed && !event.hasSelect)
             {
-                uint8_t target = menu.items[menu.selectedIndex].targetScreen;
+                const uint8_t target = menu.items[menu.selectedIndex].targetScreen;
                 if (target != INVALID_SCREEN_ID)
-                    activateScreenId(target, 1);
+                    gui.activateScreenId(target, 1);
+                return true;
             }
-        }
 
-        if (nextDown)
-        {
-            if (!menu.lastNextDown)
+            if (event.code == NavEventCode::Released && !event.longPress)
             {
-                menu.nextHoldStartMs = now;
-                menu.nextLongFired = false;
-            }
-            else if (!input.hasSelect && !menu.nextLongFired && menu.nextHoldStartMs && (now - menu.nextHoldStartMs) >= holdMs)
-            {
-                if (menu.selectedIndex < menu.itemCount)
-                {
-                    uint8_t target = menu.items[menu.selectedIndex].targetScreen;
-                    if (target != INVALID_SCREEN_ID)
-                        activateScreenId(target, 1);
-                }
-                menu.nextLongFired = true;
-            }
-        }
-        else
-        {
-            if (menu.lastNextDown && !menu.nextLongFired)
-            {
-                if (menu.selectedIndex + 1 < menu.itemCount)
-                    menu.selectedIndex++;
-                else
-                    menu.selectedIndex = 0;
+                menu.selectedIndex = (menu.selectedIndex + 1u < menu.itemCount) ? static_cast<uint8_t>(menu.selectedIndex + 1u) : 0u;
                 changed = true;
             }
+            break;
 
-            menu.nextHoldStartMs = 0;
-            menu.nextLongFired = false;
-        }
+        case NavButton::Prev:
+            if (event.code == NavEventCode::LongPressed)
+            {
+                gui.backScreen();
+                return true;
+            }
 
-        if (prevDown)
-        {
-            if (!menu.lastPrevDown)
+            if (event.code == NavEventCode::Released && !event.longPress)
             {
-                menu.prevHoldStartMs = now;
-                menu.prevLongFired = false;
-            }
-            else if (!menu.prevLongFired && menu.prevHoldStartMs && (now - menu.prevHoldStartMs) >= holdMs)
-            {
-                backScreen();
-                menu.prevLongFired = true;
-            }
-        }
-        else
-        {
-            if (menu.lastPrevDown && !menu.prevLongFired)
-            {
-                if (menu.selectedIndex > 0)
-                    menu.selectedIndex--;
-                else
-                    menu.selectedIndex = menu.itemCount - 1;
+                menu.selectedIndex = (menu.selectedIndex > 0) ? static_cast<uint8_t>(menu.selectedIndex - 1u)
+                                                              : static_cast<uint8_t>(menu.itemCount - 1u);
                 changed = true;
             }
+            break;
 
-            menu.prevHoldStartMs = 0;
-            menu.prevLongFired = false;
+        case NavButton::Select:
+            if (event.code == NavEventCode::Released && !event.longPress && event.hasSelect)
+            {
+                const uint8_t target = menu.items[menu.selectedIndex].targetScreen;
+                if (target != INVALID_SCREEN_ID)
+                    gui.activateScreenId(target, 1);
+                return true;
+            }
+            break;
+
+        case NavButton::Combo:
+            break;
         }
-
-        menu.lastNextDown = nextDown;
-        menu.lastPrevDown = prevDown;
-        menu.lastSelectDown = selectDown;
 
         if (changed)
         {
             menu.scrollbarAlpha = 255;
             menu.lastScrollActivityMs = now;
             menu.marqueeStartMs = now;
-            if (_flags.spriteEnabled && _disp.display && !_flags.inSpritePass && _screen.current == screenId)
-                updateListScreen(screenId);
+            if (gui._flags.spriteEnabled && gui._disp.display && !gui._flags.inSpritePass && gui._screen.current == event.screenId)
+                gui.updateListScreen(event.screenId);
             else
-                requestRedraw();
+                gui.requestRedraw();
         }
+
+        return changed;
     }
 
     bool GUI::updateListScreen(uint8_t screenId)

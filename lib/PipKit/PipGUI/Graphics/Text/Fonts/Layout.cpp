@@ -2,6 +2,61 @@
 
 namespace pipgui
 {
+    namespace
+    {
+        static uint32_t hashMarqueePhaseKey(int16_t x, int16_t y,
+                                            int16_t maxWidth,
+                                            TextAlign align,
+                                            FontId fontId,
+                                            uint16_t sizePx,
+                                            uint16_t weight,
+                                            uint32_t phaseStartMs) noexcept
+        {
+            uint32_t hash = 2166136261u;
+            auto mix = [&](uint32_t value)
+            {
+                hash ^= value;
+                hash *= 16777619u;
+            };
+
+            mix(static_cast<uint16_t>(x));
+            mix(static_cast<uint16_t>(y));
+            mix(static_cast<uint16_t>(maxWidth));
+            mix(static_cast<uint8_t>(align));
+            mix(static_cast<uint8_t>(fontId));
+            mix(sizePx);
+            mix(weight);
+            mix(phaseStartMs);
+            return hash;
+        }
+
+        static detail::MarqueePhaseCacheEntry &resolveMarqueePhaseEntry(detail::MarqueePhaseCacheState &cache,
+                                                                        uint32_t key,
+                                                                        uint32_t nowMs) noexcept
+        {
+            detail::MarqueePhaseCacheEntry *best = &cache.entries[0];
+            for (uint8_t i = 0; i < detail::MARQUEE_PHASE_CACHE_MAX; ++i)
+            {
+                detail::MarqueePhaseCacheEntry &entry = cache.entries[i];
+                if (entry.valid && entry.key == key)
+                {
+                    entry.lastUseMs = nowMs;
+                    return entry;
+                }
+                if (!entry.valid)
+                    best = &entry;
+                else if (best->valid && entry.lastUseMs < best->lastUseMs)
+                    best = &entry;
+            }
+
+            *best = {};
+            best->valid = true;
+            best->key = key;
+            best->lastUseMs = nowMs;
+            return *best;
+        }
+    }
+
     bool GUI::measureText(const String &text, int16_t &outW, int16_t &outH) const
     {
         outW = outH = 0;
@@ -91,7 +146,69 @@ namespace pipgui
             elapsedMs = (now >= opts.phaseStartMs) ? (now - opts.phaseStartMs) : 0U;
 
         int16_t offsetPx = 0;
-        if (speedPxPerSec > 0 && loopPx > 0 && elapsedMs > holdStartMs)
+        if (speedPxPerSec > 0 && loopPx > 0 && opts.phaseStartMs != 0)
+        {
+            const uint32_t key = hashMarqueePhaseKey(x, y, maxWidth, align,
+                                                     _typo.currentFontId,
+                                                     _typo.psdfSizePx,
+                                                     _typo.psdfWeight,
+                                                     opts.phaseStartMs);
+            detail::MarqueePhaseCacheEntry &entry = resolveMarqueePhaseEntry(_marqueePhaseCache, key, now);
+            const uint32_t holdEndMs = opts.phaseStartMs + holdStartMs;
+            const uint32_t loopMilliPx = static_cast<uint32_t>(loopPx) * 1000u;
+
+            if (entry.phaseStartMs != opts.phaseStartMs || entry.loopMilliPx == 0)
+            {
+                entry.phaseStartMs = opts.phaseStartMs;
+                entry.lastNowMs = now;
+                entry.holdEndMs = holdEndMs;
+                entry.loopMilliPx = loopMilliPx;
+                entry.holdDone = (now > holdEndMs);
+                entry.offsetMilliPx = 0;
+
+                if (entry.holdDone && loopMilliPx > 0)
+                {
+                    const uint64_t distanceMilliPx = static_cast<uint64_t>(now - holdEndMs) * speedPxPerSec;
+                    entry.offsetMilliPx = static_cast<uint32_t>(distanceMilliPx % loopMilliPx);
+                }
+            }
+            else
+            {
+                if (!entry.holdDone)
+                {
+                    if (now > entry.holdEndMs)
+                    {
+                        entry.holdDone = true;
+                        entry.lastNowMs = entry.holdEndMs;
+                    }
+                    else
+                    {
+                        entry.lastNowMs = now;
+                        entry.offsetMilliPx = 0;
+                    }
+                }
+
+                if (entry.holdDone && loopMilliPx > 0)
+                {
+                    if (entry.loopMilliPx != loopMilliPx)
+                    {
+                        if (entry.offsetMilliPx >= loopMilliPx)
+                            entry.offsetMilliPx %= loopMilliPx;
+                        entry.loopMilliPx = loopMilliPx;
+                    }
+
+                    const uint32_t deltaMs = (now >= entry.lastNowMs) ? (now - entry.lastNowMs) : 0u;
+                    const uint64_t advanced = static_cast<uint64_t>(entry.offsetMilliPx) +
+                                             static_cast<uint64_t>(deltaMs) * speedPxPerSec;
+                    entry.offsetMilliPx = static_cast<uint32_t>(advanced % loopMilliPx);
+                    entry.lastNowMs = now;
+                }
+            }
+
+            if (entry.holdDone && loopMilliPx > 0)
+                offsetPx = static_cast<int16_t>(entry.offsetMilliPx / 1000u);
+        }
+        else if (speedPxPerSec > 0 && loopPx > 0 && elapsedMs > holdStartMs)
         {
             const uint64_t distanceMilliPx = (uint64_t)(elapsedMs - holdStartMs) * speedPxPerSec;
             const uint64_t loopMilliPx = (uint64_t)loopPx * 1000ULL;
@@ -184,6 +301,182 @@ namespace pipgui
 
         drawTextAligned(clipped, x, y, fg565, 0, align);
         return true;
+    }
+
+    bool GUI::drawTextBox(const String &text,
+                          int16_t x, int16_t y,
+                          int16_t w, int16_t h,
+                          uint16_t fg565, uint16_t bg565,
+                          TextAlign align,
+                          int16_t lineGap)
+    {
+        if (w <= 0 || h <= 0 || text.length() == 0)
+            return false;
+
+        const FontData *font = fontDataForId(_typo.currentFontId);
+        if (!_typo.psdfSizePx || !font)
+            return false;
+
+        if (lineGap < 0)
+            lineGap = static_cast<int16_t>(std::max<int>(1, static_cast<int>(_typo.psdfSizePx) / 10));
+
+        const int16_t lineAdvance = static_cast<int16_t>(std::max(1, ceilToInt(font->lineHeight * static_cast<float>(_typo.psdfSizePx))) + lineGap);
+        const int16_t maxY = static_cast<int16_t>(y + h);
+        const char *buf = text.c_str();
+        const size_t len = text.length();
+        size_t pos = 0;
+        int16_t lineY = y;
+        bool drewAny = false;
+
+        pipcore::Sprite *target = getDrawTarget();
+        if (!target)
+            return false;
+
+        int32_t prevClipX = 0, prevClipY = 0, prevClipW = 0, prevClipH = 0;
+        target->getClipRect(&prevClipX, &prevClipY, &prevClipW, &prevClipH);
+
+        int32_t clipX = static_cast<int32_t>(x) - _render.originX;
+        int32_t clipY = static_cast<int32_t>(y) - _render.originY;
+        int32_t clipW = w;
+        int32_t clipH = h;
+
+        if (prevClipW > 0 && prevClipH > 0)
+        {
+            const int32_t prevRight = prevClipX + prevClipW;
+            const int32_t prevBottom = prevClipY + prevClipH;
+            const int32_t boxRight = clipX + clipW;
+            const int32_t boxBottom = clipY + clipH;
+            if (clipX < prevClipX)
+                clipX = prevClipX;
+            if (clipY < prevClipY)
+                clipY = prevClipY;
+            const int32_t finalRight = (boxRight < prevRight) ? boxRight : prevRight;
+            const int32_t finalBottom = (boxBottom < prevBottom) ? boxBottom : prevBottom;
+            clipW = finalRight - clipX;
+            clipH = finalBottom - clipY;
+        }
+
+        if (clipW <= 0 || clipH <= 0)
+        {
+            target->setClipRect(prevClipX, prevClipY, prevClipW, prevClipH);
+            return false;
+        }
+
+        target->setClipRect(clipX, clipY, clipW, clipH);
+
+        auto fitsWidth = [&](const String &line) -> bool
+        {
+            int16_t lineW = 0;
+            int16_t lineH = 0;
+            return measureText(line, lineW, lineH) && lineW <= w;
+        };
+
+        auto fitPartialWord = [&](size_t start, size_t end) -> size_t
+        {
+            size_t best = start;
+            size_t cursor = start;
+            while (cursor < end)
+            {
+                size_t candidateEnd = utf8BoundaryFloor(buf, end, cursor + 1);
+                if (candidateEnd <= cursor)
+                    candidateEnd = cursor + 1;
+                if (candidateEnd > end)
+                    candidateEnd = end;
+
+                const String candidate = text.substring(start, candidateEnd);
+                if (fitsWidth(candidate))
+                {
+                    best = candidateEnd;
+                    cursor = candidateEnd;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return best;
+        };
+
+        while (pos < len && lineY < maxY)
+        {
+            while (pos < len && (buf[pos] == ' ' || buf[pos] == '\t' || buf[pos] == '\r'))
+                ++pos;
+
+            if (pos < len && buf[pos] == '\n')
+            {
+                ++pos;
+                lineY = static_cast<int16_t>(lineY + lineAdvance);
+                continue;
+            }
+            if (pos >= len)
+                break;
+
+            const size_t lineStart = pos;
+            size_t acceptedEnd = pos;
+            size_t scan = pos;
+
+            while (scan < len)
+            {
+                if (buf[scan] == '\n')
+                    break;
+
+                size_t tokenEnd = scan;
+                while (tokenEnd < len &&
+                       buf[tokenEnd] != ' ' &&
+                       buf[tokenEnd] != '\t' &&
+                       buf[tokenEnd] != '\r' &&
+                       buf[tokenEnd] != '\n')
+                    ++tokenEnd;
+
+                const String candidate = text.substring(lineStart, tokenEnd);
+                if (fitsWidth(candidate))
+                {
+                    acceptedEnd = tokenEnd;
+                    scan = tokenEnd;
+                    while (scan < len && (buf[scan] == ' ' || buf[scan] == '\t' || buf[scan] == '\r'))
+                        ++scan;
+                    continue;
+                }
+                break;
+            }
+
+            if (acceptedEnd == lineStart)
+            {
+                size_t tokenEnd = lineStart;
+                while (tokenEnd < len &&
+                       buf[tokenEnd] != ' ' &&
+                       buf[tokenEnd] != '\t' &&
+                       buf[tokenEnd] != '\r' &&
+                       buf[tokenEnd] != '\n')
+                    ++tokenEnd;
+                acceptedEnd = fitPartialWord(lineStart, tokenEnd);
+                if (acceptedEnd == lineStart)
+                    acceptedEnd = utf8BoundaryFloor(buf, tokenEnd, lineStart + 1);
+                if (acceptedEnd <= lineStart)
+                    break;
+            }
+
+            const String line = text.substring(lineStart, acceptedEnd);
+            int16_t lineX = x;
+            if (align == TextAlign::Center)
+                lineX = static_cast<int16_t>(x + w / 2);
+            else if (align == TextAlign::Right)
+                lineX = static_cast<int16_t>(x + w);
+
+            drawTextAligned(line, lineX, lineY, fg565, bg565, align);
+            drewAny = true;
+
+            pos = acceptedEnd;
+            while (pos < len && (buf[pos] == ' ' || buf[pos] == '\t' || buf[pos] == '\r'))
+                ++pos;
+            if (pos < len && buf[pos] == '\n')
+                ++pos;
+
+            lineY = static_cast<int16_t>(lineY + lineAdvance);
+        }
+
+        target->setClipRect(prevClipX, prevClipY, prevClipW, prevClipH);
+        return drewAny;
     }
 
 }

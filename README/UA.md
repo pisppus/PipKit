@@ -1,20 +1,21 @@
-# PipKit
+<p align="center">
+  <img src="./hero.png" alt="PipKit Framework" width="100%">
+</p>
 
-[English](../README.md) &nbsp;&nbsp; **Українська** &nbsp;&nbsp; [Русский](RU.md)<br>
-<sup>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▔▔▔▔▔▔</sup>
+<p align="center">
+  <a href="../README.md">English</a> &nbsp;&nbsp; <strong>Українська</strong> &nbsp;&nbsp; <a href="RU.md">Русский</a><br>
+  <sup>▔▔▔▔▔▔</sup>
+</p>
 
-<div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; margin-bottom:20px;">
-<img width="320" height="240" alt="pipgui_20260518_210632_493" src="https://github.com/user-attachments/assets/dc04b46a-7f7c-4d45-a705-28cbaec0a135" />
-<img width="320" height="240" alt="pipgui_20260518_215506_794" src="https://github.com/user-attachments/assets/33f95e58-4bda-49f1-a294-2c1ead69dfd8" />
-<img width="320" height="240" alt="pipgui_20260518_215420_793" src="https://github.com/user-attachments/assets/22e9d015-acef-40a1-a9bf-0c9a01e95fdb" />
-<img width="320" height="240" alt="pipgui_20260518_214628_704" src="https://github.com/user-attachments/assets/323da964-b02b-4f63-a568-3fcf0703e151" />
-<img width="320" height="240" alt="pipgui_20260517_140803_213" src="https://github.com/user-attachments/assets/b40a2743-4d77-4120-9c43-a23fc3131010" />
-<img width="320" height="240" alt="pipgui_20260518_214455_446" src="https://github.com/user-attachments/assets/839aea0f-0c97-45bb-8aff-904a4dcd1414" />
+PipKit — це легкий, декларативний і швидкий GUI-фреймворк на C++17, розроблений спеціально для вбудованих систем з обмеженими ресурсами. Проєкт дотримується суворого принципу YAGNI, забезпечуючи максимальну продуктивність і насичені візуальні інтерфейси.
 
-</div>
+Фреймворк надає API у стилі SwiftUI для побудови структури інтерфейсу з мінімальною кількістю шаблонного коду. Завдяки використанню шрифтів Signed Distance Fields (PSDF), PipKit динамічно масштабує текст до будь-якого розміру з високою чіткістю граней та мінімальною витратою пам'яті. При нестачі оперативної пам'яті движок рендерингу автоматично переходить на інкрементальний двотайловий конвеєр. Також до проекту входить кросплатформовий ПК-симулятор для швидкої розробки інтерфейсу на Windows та вбудований інструментарій, включаючи безпечні OTA-оновлення з підписом та зняття скріншотів.
 
-Embedded UI-фреймворк для ESP-проєктів.<br>
-Створений для насичених інтерфейсів на обмеженому залізі, з підтримкою шрифтів, віджетів, ефектів, анімацій, спрайтів, кешування та інкрементального dirty-rect рендерингу.
+<p align="center">
+  <strong>Ресурси</strong>&emsp;&emsp;&emsp;<strong>Модуль</strong><br>
+  &ensp;&ensp;<a href="https://pisppus.is-a.dev/docs/pipkit">Доки</a>&emsp;&emsp;&emsp;&emsp;&ensp;<a href="https://github.com/pisppus/PipCore">PipCore</a>
+</p>
 
-**Ресурси**&emsp;&emsp;&emsp;&emsp;**Модуль**<br>
-&ensp;[Доки](https://pisppus.is-a.dev/docs/pipkit)&emsp;&emsp;&emsp;&emsp;&ensp;&ensp;[PipCore](https://github.com/pisppus/PipCore)
+<p align="center">
+  Розповсюджується за ліцензією MIT.
+</p>

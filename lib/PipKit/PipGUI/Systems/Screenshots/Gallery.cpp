@@ -24,28 +24,52 @@ namespace pipgui
             thumbW = 64;
             thumbH = 40;
         }
-        if (_shots.maxShots == maxShots &&
-            _shots.thumbW == thumbW &&
-            _shots.thumbH == thumbH &&
-            _shots.padding == padding)
+        const bool capacityChanged = (_shots.maxShots != maxShots);
+        const bool thumbChanged = (_shots.thumbW != thumbW || _shots.thumbH != thumbH);
+        const bool paddingChanged = (_shots.padding != padding);
+        if (!capacityChanged && !thumbChanged && !paddingChanged)
             return;
-        if (_shots.entries)
+
+        if (capacityChanged && _shots.entries)
+        {
             freeScreenshotGallery(platform());
+        }
+        else if (thumbChanged && _shots.entries)
+        {
+            for (uint8_t i = 0; i < _shots.count; ++i)
+            {
+                if (!_shots.entries[i].pixels)
+                    continue;
+                detail::free(platform(), _shots.entries[i].pixels);
+                _shots.entries[i].pixels = nullptr;
+            }
+#if (PIPGUI_SCREENSHOT_MODE == 2)
+            _shots.flashLoadIndex = 0;
+            _shots.flashThumbsDone = (_shots.count == 0);
+            _shots.thumbIndexReady = false;
+            _shots.thumbIndexW = 0;
+            _shots.thumbIndexH = 0;
+#endif
+        }
+
         _shots.maxShots = maxShots;
         _shots.thumbW = thumbW;
         _shots.thumbH = thumbH;
         _shots.padding = padding;
 #if (PIPGUI_SCREENSHOT_MODE == 2)
-        _shots.flashLoadIndex = 0;
-        _shots.fsDirsReady = false;
-        _shots.flashScanDone = false;
-        _shots.flashScanActive = false;
-        _shots.flashThumbsDone = false;
-        _shots.thumbIndexReady = false;
-        _shots.thumbIndexW = 0;
-        _shots.thumbIndexH = 0;
-        if (_shots.scanDir)
-            _shots.scanDir.close();
+        if (capacityChanged)
+        {
+            _shots.flashLoadIndex = 0;
+            _shots.fsDirsReady = false;
+            _shots.flashScanDone = false;
+            _shots.flashScanActive = false;
+            _shots.flashThumbsDone = false;
+            _shots.thumbIndexReady = false;
+            _shots.thumbIndexW = 0;
+            _shots.thumbIndexH = 0;
+            if (_shots.scanDir)
+                _shots.scanDir.close();
+        }
 #endif
 #endif
     }
@@ -170,98 +194,81 @@ namespace pipgui
                 return;
         }
 
-        const bool intScale = (w >= tw && h >= th && (w % tw) == 0 && (h % th) == 0);
-        if (intScale)
+        const uint32_t srcW16 = static_cast<uint32_t>(w) << 16;
+        const uint32_t srcH16 = static_cast<uint32_t>(h) << 16;
+        uint32_t scale16 = srcW16 / tw;
+        const uint32_t scaleY16 = srcH16 / th;
+        if (scaleY16 < scale16)
+            scale16 = scaleY16;
+        if (scale16 == 0)
+            scale16 = 1;
+
+        uint32_t cropW16 = scale16 * tw;
+        uint32_t cropH16 = scale16 * th;
+        if (cropW16 > srcW16)
+            cropW16 = srcW16;
+        if (cropH16 > srcH16)
+            cropH16 = srcH16;
+        const uint32_t cropX16 = (srcW16 > cropW16) ? ((srcW16 - cropW16) / 2u) : 0u;
+        const uint32_t cropY16 = (srcH16 > cropH16) ? ((srcH16 - cropH16) / 2u) : 0u;
+
+        for (uint16_t dy = 0; dy < th; ++dy)
         {
-            const uint16_t sxStep = static_cast<uint16_t>(w / tw);
-            const uint16_t syStep = static_cast<uint16_t>(h / th);
-            const uint32_t area = static_cast<uint32_t>(sxStep) * static_cast<uint32_t>(syStep);
-            const uint32_t half = area / 2u;
+            uint32_t y0 = cropY16 + static_cast<uint32_t>(dy) * scale16;
+            uint32_t y1 = (dy + 1u == th) ? (cropY16 + cropH16) : (y0 + scale16);
+            if (y1 > srcH16)
+                y1 = srcH16;
+            if (y0 >= y1)
+                y0 = (y1 > 0) ? (y1 - 1u) : 0u;
+            const uint32_t yLen = y1 - y0;
+            const uint16_t sy0 = static_cast<uint16_t>(y0 >> 16);
+            const uint16_t sy1 = static_cast<uint16_t>((y1 - 1u) >> 16);
 
-            for (uint16_t dy = 0; dy < th; ++dy)
+            uint16_t *dstRow = entry.pixels + static_cast<uint32_t>(dy) * tw;
+            for (uint16_t dx = 0; dx < tw; ++dx)
             {
-                uint16_t *dstRow = entry.pixels + static_cast<uint32_t>(dy) * tw;
-                const uint32_t syBase = static_cast<uint32_t>(dy) * syStep;
+                uint32_t x0 = cropX16 + static_cast<uint32_t>(dx) * scale16;
+                uint32_t x1 = (dx + 1u == tw) ? (cropX16 + cropW16) : (x0 + scale16);
+                if (x1 > srcW16)
+                    x1 = srcW16;
+                if (x0 >= x1)
+                    x0 = (x1 > 0) ? (x1 - 1u) : 0u;
+                const uint32_t xLen = x1 - x0;
 
-                for (uint16_t dx = 0; dx < tw; ++dx)
+                uint64_t ar = 0, ag = 0, ab = 0;
+                const uint16_t sx0 = static_cast<uint16_t>(x0 >> 16);
+                const uint16_t sx1 = static_cast<uint16_t>((x1 - 1u) >> 16);
+
+                for (uint16_t sy = sy0; sy <= sy1; ++sy)
                 {
-                    const uint32_t sxBase = static_cast<uint32_t>(dx) * sxStep;
-                    uint32_t sr = 0, sg = 0, sb = 0;
-                    for (uint16_t iy = 0; iy < syStep; ++iy)
-                    {
-                        const uint16_t *srcRow = src + (syBase + iy) * w + sxBase;
-                        for (uint16_t ix = 0; ix < sxStep; ++ix)
-                        {
-                            const uint16_t px = pipcore::Sprite::swap16(srcRow[ix]);
-                            sr += (px >> 11) & 31u;
-                            sg += (px >> 5) & 63u;
-                            sb += px & 31u;
-                        }
-                    }
-                    const uint32_t r = (sr + half) / area;
-                    const uint32_t g = (sg + half) / area;
-                    const uint32_t b = (sb + half) / area;
-                    dstRow[dx] = static_cast<uint16_t>((r << 11) | (g << 5) | b);
-                }
-            }
-        }
-        else
-        {
-            const uint32_t srcW16 = static_cast<uint32_t>(w) << 16;
-            const uint32_t srcH16 = static_cast<uint32_t>(h) << 16;
-            const uint32_t scaleX16 = srcW16 / tw;
-            const uint32_t scaleY16 = srcH16 / th;
-
-            for (uint16_t dy = 0; dy < th; ++dy)
-            {
-                const uint32_t y0 = static_cast<uint32_t>(dy) * scaleY16;
-                const uint32_t y1 = (dy + 1u == th) ? srcH16 : (y0 + scaleY16);
-                const uint32_t yLen = y1 - y0;
-                const uint16_t sy0 = static_cast<uint16_t>(y0 >> 16);
-                const uint16_t sy1 = static_cast<uint16_t>((y1 - 1u) >> 16);
-
-                uint16_t *dstRow = entry.pixels + static_cast<uint32_t>(dy) * tw;
-                for (uint16_t dx = 0; dx < tw; ++dx)
-                {
-                    const uint32_t x0 = static_cast<uint32_t>(dx) * scaleX16;
-                    const uint32_t x1 = (dx + 1u == tw) ? srcW16 : (x0 + scaleX16);
-                    const uint32_t xLen = x1 - x0;
-
-                    uint64_t ar = 0, ag = 0, ab = 0;
-                    const uint16_t sx0 = static_cast<uint16_t>(x0 >> 16);
-                    const uint16_t sx1 = static_cast<uint16_t>((x1 - 1u) >> 16);
-
-                    for (uint16_t sy = sy0; sy <= sy1; ++sy)
-                    {
-                        const uint32_t wy = ssd::overlap16(y0, y1, static_cast<uint32_t>(sy) << 16);
-                        if (!wy)
-                            continue;
-                        const uint16_t *srcRow = src + static_cast<uint32_t>(sy) * w;
-                        for (uint16_t sx = sx0; sx <= sx1; ++sx)
-                        {
-                            const uint32_t wx = ssd::overlap16(x0, x1, static_cast<uint32_t>(sx) << 16);
-                            if (!wx)
-                                continue;
-                            const uint64_t a = static_cast<uint64_t>(wx) * static_cast<uint64_t>(wy);
-                            const uint16_t px = pipcore::Sprite::swap16(srcRow[sx]);
-                            ar += static_cast<uint64_t>((px >> 11) & 31u) * a;
-                            ag += static_cast<uint64_t>((px >> 5) & 63u) * a;
-                            ab += static_cast<uint64_t>(px & 31u) * a;
-                        }
-                    }
-
-                    const uint64_t total = static_cast<uint64_t>(xLen) * static_cast<uint64_t>(yLen);
-                    if (!total)
-                    {
-                        dstRow[dx] = 0;
+                    const uint32_t wy = ssd::overlap16(y0, y1, static_cast<uint32_t>(sy) << 16);
+                    if (!wy)
                         continue;
+                    const uint16_t *srcRow = src + static_cast<uint32_t>(sy) * w;
+                    for (uint16_t sx = sx0; sx <= sx1; ++sx)
+                    {
+                        const uint32_t wx = ssd::overlap16(x0, x1, static_cast<uint32_t>(sx) << 16);
+                        if (!wx)
+                            continue;
+                        const uint64_t a = static_cast<uint64_t>(wx) * static_cast<uint64_t>(wy);
+                        const uint16_t px = pipcore::Sprite::swap16(srcRow[sx]);
+                        ar += static_cast<uint64_t>((px >> 11) & 31u) * a;
+                        ag += static_cast<uint64_t>((px >> 5) & 63u) * a;
+                        ab += static_cast<uint64_t>(px & 31u) * a;
                     }
-                    const uint64_t half = total / 2u;
-                    const uint64_t r = (ar + half) / total;
-                    const uint64_t g = (ag + half) / total;
-                    const uint64_t b = (ab + half) / total;
-                    dstRow[dx] = static_cast<uint16_t>((r << 11) | (g << 5) | b);
                 }
+
+                const uint64_t total = static_cast<uint64_t>(xLen) * static_cast<uint64_t>(yLen);
+                if (!total)
+                {
+                    dstRow[dx] = 0;
+                    continue;
+                }
+                const uint64_t half = total / 2u;
+                const uint64_t r = (ar + half) / total;
+                const uint64_t g = (ag + half) / total;
+                const uint64_t b = (ab + half) / total;
+                dstRow[dx] = static_cast<uint16_t>((r << 11) | (g << 5) | b);
             }
         }
 

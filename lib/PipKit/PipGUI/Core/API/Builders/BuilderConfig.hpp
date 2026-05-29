@@ -347,42 +347,67 @@ namespace pipgui
         void apply();
     };
 
-    struct ListInputFluent : detail::FluentLifetime
+    struct BindNavFluent : detail::FluentLifetime
     {
-        PIPGUI_DEFAULT_FLUENT_MOVE(ListInputFluent);
-        bool _nextDown;
-        bool _prevDown;
-        bool _selectDown;
-        bool _hasSelect;
+        PIPGUI_DEFAULT_FLUENT_MOVE(BindNavFluent);
+        NavHandler _handler;
+        void *_userData;
+        bool _clear;
 
-        ListInputFluent(GUI *g)
-            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false), _selectDown(false), _hasSelect(false)
+        explicit BindNavFluent(GUI *g)
+            : detail::FluentLifetime(g), _handler(nullptr), _userData(nullptr), _clear(false)
         {
         }
 
-        ListInputFluent &nextDown(bool v)
+        BindNavFluent &handler(NavHandler value, void *userData = nullptr)
         {
             PIPGUI_FLUENT_GUARD();
-            _nextDown = v;
+            _handler = value;
+            _userData = userData;
+            _clear = false;
             return *this;
         }
 
-        ListInputFluent &prevDown(bool v)
+        BindNavFluent &clear()
         {
             PIPGUI_FLUENT_GUARD();
-            _prevDown = v;
+            _handler = nullptr;
+            _userData = nullptr;
+            _clear = true;
             return *this;
         }
 
-        ListInputFluent &selectDown(bool v)
+        ~BindNavFluent() { apply(); }
+
+    private:
+        void apply();
+    };
+
+    struct UseListNavFluent : detail::FluentLifetime
+    {
+        PIPGUI_DEFAULT_FLUENT_MOVE(UseListNavFluent);
+
+        explicit UseListNavFluent(GUI *g)
+            : detail::FluentLifetime(g)
         {
-            PIPGUI_FLUENT_GUARD();
-            _selectDown = v;
-            _hasSelect = true;
-            return *this;
         }
 
-        ~ListInputFluent() { apply(); }
+        ~UseListNavFluent() { apply(); }
+
+    private:
+        void apply();
+    };
+
+    struct UseTileNavFluent : detail::FluentLifetime
+    {
+        PIPGUI_DEFAULT_FLUENT_MOVE(UseTileNavFluent);
+
+        explicit UseTileNavFluent(GUI *g)
+            : detail::FluentLifetime(g)
+        {
+        }
+
+        ~UseTileNavFluent() { apply(); }
 
     private:
         void apply();
@@ -566,47 +591,6 @@ namespace pipgui
         }
 
         ~UpdateListFluent() { apply(); }
-
-    private:
-        void apply();
-    };
-
-    struct TileInputFluent : detail::FluentLifetime
-    {
-        PIPGUI_DEFAULT_FLUENT_MOVE(TileInputFluent);
-        bool _nextDown;
-        bool _prevDown;
-        bool _selectDown;
-        bool _hasSelect;
-
-        TileInputFluent(GUI *g)
-            : detail::FluentLifetime(g), _nextDown(false), _prevDown(false), _selectDown(false), _hasSelect(false)
-        {
-        }
-
-        TileInputFluent &nextDown(bool v)
-        {
-            PIPGUI_FLUENT_GUARD();
-            _nextDown = v;
-            return *this;
-        }
-
-        TileInputFluent &prevDown(bool v)
-        {
-            PIPGUI_FLUENT_GUARD();
-            _prevDown = v;
-            return *this;
-        }
-
-        TileInputFluent &selectDown(bool v)
-        {
-            PIPGUI_FLUENT_GUARD();
-            _selectDown = v;
-            _hasSelect = true;
-            return *this;
-        }
-
-        ~TileInputFluent() { apply(); }
 
     private:
         void apply();

@@ -1,6 +1,6 @@
 {
   "name": "PipKit",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "High-performance embedded GUI toolkit for ESP32 firmware projects.",
   "frameworks": [
     "arduino"

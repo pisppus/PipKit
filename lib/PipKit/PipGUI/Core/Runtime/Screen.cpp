@@ -56,29 +56,7 @@ namespace pipgui
         if (_screen.to >= _screen.capacity || !_flags.spriteEnabled || !_disp.display || (!targetHasCallback && !targetIsList && !targetIsTile))
         {
             _screen.current = _screen.to;
-            {
-                const InputState &in = _input;
-                if (ListState *list = getList(_screen.current))
-                {
-                    list->nextHoldStartMs = 0;
-                    list->prevHoldStartMs = 0;
-                    list->nextLongFired = false;
-                    list->prevLongFired = false;
-                    list->lastNextDown = in.nextDown;
-                    list->lastPrevDown = in.prevDown;
-                    list->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                }
-                if (TileState *tile = getTile(_screen.current))
-                {
-                    tile->nextHoldStartMs = 0;
-                    tile->prevHoldStartMs = 0;
-                    tile->nextLongFired = false;
-                    tile->prevLongFired = false;
-                    tile->lastNextDown = in.nextDown;
-                    tile->lastPrevDown = in.prevDown;
-                    tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                }
-            }
+            resetNavDispatch();
             _flags.needRedraw = 1;
             _flags.screenTransition = 0;
             return;
@@ -191,6 +169,47 @@ namespace pipgui
             _render.activeSprite = prevActive;
             _flags.inSpritePass = prevRender;
         };
+        if (logicalRotationActive() && !notifActive && !toastActive)
+        {
+            renderScreenToMainSprite(fromCb, _screen.current);
+            renderStatusBar();
+            _dirty.count = 0;
+            Debug::clearRects();
+
+            if (revealPrimary > 0)
+            {
+                const bool forward = (_screen.transDir >= 0);
+                if (horizontal)
+                {
+                    const int16_t revealX = forward ? (int16_t)(contentX + contentW - revealPrimary) : contentX;
+                    renderScreenClipped(toCb, _screen.to, revealX, contentY, revealPrimary, contentH);
+                }
+                else
+                {
+                    const int16_t revealY = forward ? (int16_t)(contentY + contentH - revealPrimary) : contentY;
+                    renderScreenClipped(toCb, _screen.to, contentX, revealY, contentW, revealPrimary);
+                }
+            }
+
+            presentSprite(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight, "present");
+
+            if (el >= dur)
+            {
+                _flags.screenTransition = 0;
+                _screen.current = _screen.to;
+                resetNavDispatch();
+                if (keepStatusBarStatic)
+                {
+                    renderScreenToMainSprite(toCb, _screen.current);
+                    renderStatusBar();
+                    presentSprite(0, 0, (int16_t)_render.screenWidth, (int16_t)_render.screenHeight, "present");
+                }
+                _flags.needRedraw = 0;
+                _dirty.count = 0;
+                Debug::clearRects();
+            }
+            return;
+        }
         if (!notifActive && !toastActive)
         {
             renderScreenToMainSprite(toCb, _screen.to);
@@ -234,29 +253,7 @@ namespace pipgui
             {
                 _flags.screenTransition = 0;
                 _screen.current = _screen.to;
-                {
-                    const InputState &in = _input;
-                    if (ListState *list = getList(_screen.current))
-                    {
-                        list->nextHoldStartMs = 0;
-                        list->prevHoldStartMs = 0;
-                        list->nextLongFired = false;
-                        list->prevLongFired = false;
-                        list->lastNextDown = in.nextDown;
-                        list->lastPrevDown = in.prevDown;
-                        list->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                    }
-                    if (TileState *tile = getTile(_screen.current))
-                    {
-                        tile->nextHoldStartMs = 0;
-                        tile->prevHoldStartMs = 0;
-                        tile->nextLongFired = false;
-                        tile->prevLongFired = false;
-                        tile->lastNextDown = in.nextDown;
-                        tile->lastPrevDown = in.prevDown;
-                        tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                    }
-                }
+                resetNavDispatch();
                 if (keepStatusBarStatic)
                 {
                     renderStatusBar();
@@ -431,6 +428,7 @@ namespace pipgui
             {
                 _flags.screenTransition = 0;
                 _screen.current = _screen.to;
+                resetNavDispatch();
                 if (keepStatusBarStatic)
                 {
                     renderStatusBar();
@@ -507,29 +505,7 @@ namespace pipgui
         {
             _flags.screenTransition = 0;
             _screen.current = _screen.to;
-            {
-                const InputState &in = _input;
-                if (ListState *list = getList(_screen.current))
-                {
-                    list->nextHoldStartMs = 0;
-                    list->prevHoldStartMs = 0;
-                    list->nextLongFired = false;
-                    list->prevLongFired = false;
-                    list->lastNextDown = in.nextDown;
-                    list->lastPrevDown = in.prevDown;
-                    list->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                }
-                if (TileState *tile = getTile(_screen.current))
-                {
-                    tile->nextHoldStartMs = 0;
-                    tile->prevHoldStartMs = 0;
-                    tile->nextLongFired = false;
-                    tile->prevLongFired = false;
-                    tile->lastNextDown = in.nextDown;
-                    tile->lastPrevDown = in.prevDown;
-                    tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
-                }
-            }
+            resetNavDispatch();
             _flags.needRedraw = 0;
             _dirty.count = 0;
             Debug::clearRects();

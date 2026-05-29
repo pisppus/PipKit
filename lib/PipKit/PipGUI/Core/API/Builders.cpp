@@ -9,25 +9,52 @@ namespace pipgui
         {
             return (radius > amount) ? static_cast<uint8_t>(radius - amount) : 0;
         }
+
+        inline int16_t resolveAreaStart(int16_t origin, int16_t span, int16_t value, int16_t extent) noexcept
+        {
+            return (value == center) ? static_cast<int16_t>(origin + (span - extent) / 2) : static_cast<int16_t>(origin + value);
+        }
+
+        inline int16_t resolveAreaAnchor(int16_t origin, int16_t span, int16_t value, int16_t) noexcept
+        {
+            return (value == center) ? static_cast<int16_t>(origin + span / 2) : static_cast<int16_t>(origin + value);
+        }
+
+        inline int16_t resolveScreenStart(GUI &gui, bool horizontal, int16_t value, int16_t extent) noexcept
+        {
+            if (value != center)
+                return value;
+            return horizontal ? gui.centerX(extent) : gui.centerY(extent);
+        }
+
+        inline int16_t resolveScreenAnchor(GUI &gui, bool horizontal, int16_t value, int16_t extent) noexcept
+        {
+            if (value != center)
+                return value;
+            const int16_t start = horizontal ? gui.centerX(extent) : gui.centerY(extent);
+            return static_cast<int16_t>(start + extent / 2);
+        }
     }
 
     void DrawRectFluent::draw()
     {
         if (!beginCommit())
             return;
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
         if (_hasFill)
         {
             if (_perCorner)
             {
-                detail::GuiAccess::fillRoundRect(*_gui, _x, _y, _w, _h, _radiusTL, _radiusTR, _radiusBR, _radiusBL, _fillColor);
+                detail::GuiAccess::fillRoundRect(*_gui, x, y, _w, _h, _radiusTL, _radiusTR, _radiusBR, _radiusBL, _fillColor);
             }
             else if (_radius > 0)
             {
-                detail::GuiAccess::fillRoundRect(*_gui, _x, _y, _w, _h, _radius, _fillColor);
+                detail::GuiAccess::fillRoundRect(*_gui, x, y, _w, _h, _radius, _fillColor);
             }
             else
             {
-                detail::GuiAccess::fillRect(*_gui, _x, _y, _w, _h, _fillColor);
+                detail::GuiAccess::fillRect(*_gui, x, y, _w, _h, _fillColor);
             }
         }
 
@@ -36,8 +63,8 @@ namespace pipgui
 
         for (uint8_t i = 0; i < _borderWidth; ++i)
         {
-            const int16_t x = (int16_t)(_x + i);
-            const int16_t y = (int16_t)(_y + i);
+            const int16_t bx = (int16_t)(x + i);
+            const int16_t by = (int16_t)(y + i);
             const int16_t w = (int16_t)(_w - i * 2);
             const int16_t h = (int16_t)(_h - i * 2);
             if (w <= 0 || h <= 0)
@@ -45,7 +72,7 @@ namespace pipgui
 
             if (_perCorner)
             {
-                detail::GuiAccess::drawRoundRect(*_gui, x, y, w, h,
+                detail::GuiAccess::drawRoundRect(*_gui, bx, by, w, h,
                                                  shrinkRadius(_radiusTL, i),
                                                  shrinkRadius(_radiusTR, i),
                                                  shrinkRadius(_radiusBR, i),
@@ -54,14 +81,14 @@ namespace pipgui
             }
             else if (_radius > 0)
             {
-                detail::GuiAccess::drawRoundRect(*_gui, x, y, w, h, shrinkRadius(_radius, i), _borderColor);
+                detail::GuiAccess::drawRoundRect(*_gui, bx, by, w, h, shrinkRadius(_radius, i), _borderColor);
             }
             else
             {
-                const int16_t x0 = x;
-                const int16_t y0 = y;
-                const int16_t x1 = (int16_t)(x + w - 1);
-                const int16_t y1 = (int16_t)(y + h - 1);
+                const int16_t x0 = bx;
+                const int16_t y0 = by;
+                const int16_t x1 = (int16_t)(bx + w - 1);
+                const int16_t y1 = (int16_t)(by + h - 1);
                 detail::GuiAccess::drawLine(*_gui, x0, y0, x1, y0, 1, _borderColor);
                 detail::GuiAccess::drawLine(*_gui, x1, y0, x1, y1, 1, _borderColor);
                 detail::GuiAccess::drawLine(*_gui, x1, y1, x0, y1, 1, _borderColor);
@@ -74,56 +101,74 @@ namespace pipgui
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::fillRectGradientVertical(*_gui, _x, _y, _w, _h, _topColor, _bottomColor);
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
+        detail::GuiAccess::fillRectGradientVertical(*_gui, x, y, _w, _h, _topColor, _bottomColor);
     }
 
     void GradientHorizontalFluent::draw()
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::fillRectGradientHorizontal(*_gui, _x, _y, _w, _h, _leftColor, _rightColor);
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
+        detail::GuiAccess::fillRectGradientHorizontal(*_gui, x, y, _w, _h, _leftColor, _rightColor);
     }
 
     void GradientCornersFluent::draw()
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::fillRectGradientCorners(*_gui, _x, _y, _w, _h, _c00, _c10, _c01, _c11);
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
+        detail::GuiAccess::fillRectGradientCorners(*_gui, x, y, _w, _h, _c00, _c10, _c01, _c11);
     }
 
     void GradientDiagonalFluent::draw()
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::fillRectGradientDiagonal(*_gui, _x, _y, _w, _h, _tlColor, _brColor);
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
+        detail::GuiAccess::fillRectGradientDiagonal(*_gui, x, y, _w, _h, _tlColor, _brColor);
     }
 
     void GradientRadialFluent::draw()
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::fillRectGradientRadial(*_gui, _x, _y, _w, _h, _cx, _cy, _radius, _innerColor, _outerColor);
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
+        const int16_t cx = _hasArea ? resolveAreaAnchor(_area.x, _area.w, _cx, 0) : _cx;
+        const int16_t cy = _hasArea ? resolveAreaAnchor(_area.y, _area.h, _cy, 0) : _cy;
+        detail::GuiAccess::fillRectGradientRadial(*_gui, x, y, _w, _h, cx, cy, _radius, _innerColor, _outerColor);
     }
 
     void DrawLineFluent::draw()
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::drawLine(*_gui, _x0, _y0, _x1, _y1, _thickness, _color);
+        const int16_t x0 = _hasArea ? (int16_t)(_area.x + _x0) : _x0;
+        const int16_t y0 = _hasArea ? (int16_t)(_area.y + _y0) : _y0;
+        const int16_t x1 = _hasArea ? (int16_t)(_area.x + _x1) : _x1;
+        const int16_t y1 = _hasArea ? (int16_t)(_area.y + _y1) : _y1;
+        detail::GuiAccess::drawLine(*_gui, x0, y0, x1, y1, _thickness, _color);
     }
 
     void DrawCircleFluent::draw()
     {
         if (!beginCommit())
             return;
+        const int16_t cx = _hasArea ? resolveAreaAnchor(_area.x, _area.w, _cx, _r * 2) : resolveScreenAnchor(*_gui, true, _cx, _r * 2);
+        const int16_t cy = _hasArea ? resolveAreaAnchor(_area.y, _area.h, _cy, _r * 2) : resolveScreenAnchor(*_gui, false, _cy, _r * 2);
         if (_hasFill)
-            detail::GuiAccess::fillCircle(*_gui, _cx, _cy, _r, _fillColor);
+            detail::GuiAccess::fillCircle(*_gui, cx, cy, _r, _fillColor);
         for (uint8_t i = 0; i < _borderWidth; ++i)
         {
             const int16_t r = (int16_t)(_r - i);
             if (r < 0)
                 break;
-            detail::GuiAccess::drawCircle(*_gui, _cx, _cy, r, _borderColor);
+            detail::GuiAccess::drawCircle(*_gui, cx, cy, r, _borderColor);
         }
     }
 
@@ -131,22 +176,26 @@ namespace pipgui
     {
         if (!beginCommit())
             return;
-        detail::GuiAccess::drawArc(*_gui, _cx, _cy, _r, _thickness, _startDeg, _endDeg, _color);
+        const int16_t cx = _hasArea ? resolveAreaAnchor(_area.x, _area.w, _cx, _r * 2) : resolveScreenAnchor(*_gui, true, _cx, _r * 2);
+        const int16_t cy = _hasArea ? resolveAreaAnchor(_area.y, _area.h, _cy, _r * 2) : resolveScreenAnchor(*_gui, false, _cy, _r * 2);
+        detail::GuiAccess::drawArc(*_gui, cx, cy, _r, _thickness, _startDeg, _endDeg, _color);
     }
 
     void DrawEllipseFluent::draw()
     {
         if (!beginCommit())
             return;
+        const int16_t cx = _hasArea ? resolveAreaAnchor(_area.x, _area.w, _cx, _rx * 2) : resolveScreenAnchor(*_gui, true, _cx, _rx * 2);
+        const int16_t cy = _hasArea ? resolveAreaAnchor(_area.y, _area.h, _cy, _ry * 2) : resolveScreenAnchor(*_gui, false, _cy, _ry * 2);
         if (_hasFill)
-            detail::GuiAccess::fillEllipse(*_gui, _cx, _cy, _rx, _ry, _fillColor);
+            detail::GuiAccess::fillEllipse(*_gui, cx, cy, _rx, _ry, _fillColor);
         for (uint8_t i = 0; i < _borderWidth; ++i)
         {
             const int16_t rx = (int16_t)(_rx - i);
             const int16_t ry = (int16_t)(_ry - i);
             if (rx < 0 || ry < 0)
                 break;
-            detail::GuiAccess::drawEllipse(*_gui, _cx, _cy, rx, ry, _borderColor);
+            detail::GuiAccess::drawEllipse(*_gui, cx, cy, rx, ry, _borderColor);
         }
     }
 
@@ -154,19 +203,81 @@ namespace pipgui
     {
         if (!beginCommit())
             return;
+
+        UiPoint p0 = _p0;
+        UiPoint p1 = _p1;
+        UiPoint p2 = _p2;
+        if (_usePreset)
+        {
+            const int16_t halfW = _w / 2;
+            const int16_t halfH = _h / 2;
+            switch (_dir)
+            {
+            case TriangleDirection::Right:
+                p0 = UiPoint{halfW, 0};
+                p1 = UiPoint{(int16_t)-halfW, (int16_t)(-_h / 2)};
+                p2 = UiPoint{(int16_t)-halfW, halfH};
+                break;
+            case TriangleDirection::Down:
+                p0 = UiPoint{0, halfH};
+                p1 = UiPoint{halfW, (int16_t)(-_h / 2)};
+                p2 = UiPoint{(int16_t)-halfW, (int16_t)(-_h / 2)};
+                break;
+            case TriangleDirection::Left:
+                p0 = UiPoint{(int16_t)(-_w / 2), 0};
+                p1 = UiPoint{halfW, (int16_t)(-_h / 2)};
+                p2 = UiPoint{halfW, halfH};
+                break;
+            case TriangleDirection::Up:
+            default:
+                p0 = UiPoint{0, (int16_t)(-_h / 2)};
+                p1 = UiPoint{halfW, halfH};
+                p2 = UiPoint{(int16_t)(-_w / 2), halfH};
+                break;
+            }
+        }
+
+        const int16_t minX = std::min({p0.x, p1.x, p2.x});
+        const int16_t minY = std::min({p0.y, p1.y, p2.y});
+        const int16_t maxX = std::max({p0.x, p1.x, p2.x});
+        const int16_t maxY = std::max({p0.y, p1.y, p2.y});
+        const int16_t boundsW = (int16_t)(maxX - minX + 1);
+        const int16_t boundsH = (int16_t)(maxY - minY + 1);
+
+        int16_t tx = _tx;
+        int16_t ty = _ty;
+        if (_hasArea)
+        {
+            tx = (_tx == center) ? (int16_t)(_area.x + (_area.w - boundsW) / 2 - minX) : (int16_t)(_area.x + _tx);
+            ty = (_ty == center) ? (int16_t)(_area.y + (_area.h - boundsH) / 2 - minY) : (int16_t)(_area.y + _ty);
+        }
+        else
+        {
+            if (_tx == center)
+                tx = (int16_t)(_gui->centerX(boundsW) - minX);
+            if (_ty == center)
+                ty = (int16_t)(_gui->centerY(boundsH) - minY);
+        }
+
+        const int16_t x0 = (int16_t)(tx + p0.x);
+        const int16_t y0 = (int16_t)(ty + p0.y);
+        const int16_t x1 = (int16_t)(tx + p1.x);
+        const int16_t y1 = (int16_t)(ty + p1.y);
+        const int16_t x2 = (int16_t)(tx + p2.x);
+        const int16_t y2 = (int16_t)(ty + p2.y);
         if (_hasFill)
         {
             if (_radius > 0)
-                detail::GuiAccess::fillRoundTriangle(*_gui, _x0, _y0, _x1, _y1, _x2, _y2, _radius, _fillColor);
+                detail::GuiAccess::fillRoundTriangle(*_gui, x0, y0, x1, y1, x2, y2, _radius, _fillColor);
             else
-                detail::GuiAccess::fillTriangle(*_gui, _x0, _y0, _x1, _y1, _x2, _y2, _fillColor);
+                detail::GuiAccess::fillTriangle(*_gui, x0, y0, x1, y1, x2, y2, _fillColor);
         }
         for (uint8_t i = 0; i < _borderWidth; ++i)
         {
             if (_radius > 0)
-                detail::GuiAccess::drawRoundTriangle(*_gui, _x0, _y0, _x1, _y1, _x2, _y2, shrinkRadius(_radius, i), _borderColor);
+                detail::GuiAccess::drawRoundTriangle(*_gui, x0, y0, x1, y1, x2, y2, shrinkRadius(_radius, i), _borderColor);
             else
-                detail::GuiAccess::drawTriangle(*_gui, _x0, _y0, _x1, _y1, _x2, _y2, _borderColor);
+                detail::GuiAccess::drawTriangle(*_gui, x0, y0, x1, y1, x2, y2, _borderColor);
         }
     }
 
@@ -174,31 +285,33 @@ namespace pipgui
     {
         if (!beginCommit())
             return;
+        const int16_t x = _hasArea ? resolveAreaStart(_area.x, _area.w, _x, _w) : _x;
+        const int16_t y = _hasArea ? resolveAreaStart(_area.y, _area.h, _y, _h) : _y;
         if (_hasFill)
         {
             if (_perCorner)
-                detail::GuiAccess::fillSquircleRect(*_gui, _x, _y, _w, _h, _radiusTL, _radiusTR, _radiusBR, _radiusBL, _fillColor);
+                detail::GuiAccess::fillSquircleRect(*_gui, x, y, _w, _h, _radiusTL, _radiusTR, _radiusBR, _radiusBL, _fillColor);
             else
-                detail::GuiAccess::fillSquircleRect(*_gui, _x, _y, _w, _h, _radius, _fillColor);
+                detail::GuiAccess::fillSquircleRect(*_gui, x, y, _w, _h, _radius, _fillColor);
         }
         for (uint8_t i = 0; i < _borderWidth; ++i)
         {
-            const int16_t x = (int16_t)(_x + i);
-            const int16_t y = (int16_t)(_y + i);
+            const int16_t bx = (int16_t)(x + i);
+            const int16_t by = (int16_t)(y + i);
             const int16_t w = (int16_t)(_w - i * 2);
             const int16_t h = (int16_t)(_h - i * 2);
             if (w <= 0 || h <= 0)
                 break;
 
             if (_perCorner)
-                detail::GuiAccess::drawSquircleRect(*_gui, x, y, w, h,
+                detail::GuiAccess::drawSquircleRect(*_gui, bx, by, w, h,
                                                     shrinkRadius(_radiusTL, i),
                                                     shrinkRadius(_radiusTR, i),
                                                     shrinkRadius(_radiusBR, i),
                                                     shrinkRadius(_radiusBL, i),
                                                     _borderColor);
             else
-                detail::GuiAccess::drawSquircleRect(*_gui, x, y, w, h, shrinkRadius(_radius, i), _borderColor);
+                detail::GuiAccess::drawSquircleRect(*_gui, bx, by, w, h, shrinkRadius(_radius, i), _borderColor);
         }
     }
 

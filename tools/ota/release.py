@@ -145,7 +145,7 @@ def main() -> int:
             raise SystemExit(
                 "Usage:\n"
                 "  python tools/ota/release.py\n"
-                "  python tools/ota/release.py --.pio/build/<env>/firmware.bin --stable --\"Title\" --1.6.1 --https://<domain>/fw [--\"Notes\"]\n"
+                "  python tools/ota/release.py --.pio/build/<env>/firmware.bin --stable --\"Title\" --1.6.2 --https://<domain>/fw [--\"Notes\"]\n"
                 "  python tools/ota/release.py --beta --interactive"
             )
         bin_arg, title_arg, version_arg, site_base_arg = compact[:4]

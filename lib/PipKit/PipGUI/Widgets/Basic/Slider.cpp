@@ -92,7 +92,6 @@ namespace pipgui
 
     bool GUI::stepSliderState(detail::SliderState &state, int16_t &value, bool nextDown, bool prevDown)
     {
-        _navConsumed = true;
         const uint32_t now = nowMs();
         bool changed = false;
 
@@ -291,6 +290,7 @@ namespace pipgui
         if (trackH > h)
             trackH = h;
         const int16_t trackY = (int16_t)(y0 + (h - trackH) / 2);
+        const int16_t trackCenterY = static_cast<int16_t>(trackY + trackH / 2);
         const uint8_t trackRadius = (uint8_t)(trackH / 2);
 
         int16_t thumbW = (int16_t)(h * 1.58f + 0.5f);
@@ -307,7 +307,7 @@ namespace pipgui
 
         const int16_t thumbTravel = w - thumbW;
         const int16_t thumbX = x0 + (thumbTravel > 0 ? (int16_t)(thumbTravel * k + 0.5f) : 0);
-        const int16_t thumbY = (int16_t)(y0 + (h - thumbH) / 2);
+        const int16_t thumbY = static_cast<int16_t>(trackCenterY - thumbH / 2);
         const int16_t thumbCenterX = thumbX + thumbW / 2;
         int16_t fillW = thumbCenterX - x0;
         if (fillW < 0)
@@ -319,8 +319,10 @@ namespace pipgui
         const uint16_t inactive565 = detail::blend565(bg565, trackInactive565, enabledAlpha);
         const uint16_t fill565 = detail::blend565(bg565, activeColor, enabledAlpha);
         const uint16_t thumb565 = detail::blend565(bg565, thumbBase565, enabledAlpha);
-        const uint16_t shadow565 = detail::blend565(bg565, static_cast<uint16_t>(0x0000), (uint8_t)(enabledAlpha / 4));
-        const uint16_t border565 = detail::blend565(thumb565, static_cast<uint16_t>(0x0000), 22);
+        const uint8_t shadowAlpha = static_cast<uint8_t>(enabledAlpha / 4);
+        const uint8_t borderAlpha = static_cast<uint8_t>((22u * enabledAlpha) / 255u);
+        const uint16_t shadow565 = detail::blend565(bg565, static_cast<uint16_t>(0x0000), shadowAlpha);
+        const uint16_t border565 = detail::blend565(thumb565, static_cast<uint16_t>(0x0000), borderAlpha);
 
         drawLinearProgressRange(x0, trackY, w, trackH, x0, (int16_t)(x0 + fillW), inactive565, fill565, trackRadius);
 
@@ -328,7 +330,7 @@ namespace pipgui
         const int16_t shadowY = (int16_t)(thumbY + 1);
         const int16_t shadowW = thumbW > 1 ? (int16_t)(thumbW - 1) : thumbW;
         const int16_t shadowH = thumbH > 1 ? (int16_t)(thumbH - 1) : thumbH;
-        if (shadowW > 0 && shadowH > 0)
+        if (enabledAlpha != 0 && shadowW > 0 && shadowH > 0)
             fillRoundRect(shadowX, shadowY, shadowW, shadowH, (uint8_t)(shadowH / 2), shadow565);
         fillRoundRect(thumbX, thumbY, thumbW, thumbH, thumbRadius, border565);
         fillRoundRect((int16_t)(thumbX + 1), (int16_t)(thumbY + 1), (int16_t)(thumbW - 2), (int16_t)(thumbH - 2),

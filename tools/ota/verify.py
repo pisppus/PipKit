@@ -93,7 +93,7 @@ def main() -> int:
             raise SystemExit(
                 "Usage:\n"
                 "  python tools/ota/verify.py\n"
-                "  python tools/ota/verify.py --tools/ota/out/<project>/stable/1.6.1/manifest.json [--tools/ota/out/<project>/stable/1.6.1/fw.bin] [--<pubkey>]"
+                "  python tools/ota/verify.py --tools/ota/out/<project>/stable/1.6.2/manifest.json [--tools/ota/out/<project>/stable/1.6.2/fw.bin] [--<pubkey>]"
             )
         manifest_src = compact[0]
         bin_src_arg = compact[1] if len(compact) == 2 else None

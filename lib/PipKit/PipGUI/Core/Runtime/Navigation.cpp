@@ -4,6 +4,18 @@
 
 namespace pipgui
 {
+    namespace
+    {
+        constexpr uint32_t kNavLongPressMs = 400;
+        constexpr uint32_t kNavRepeatMs = 130;
+
+        void blockNavButton(detail::NavButtonDispatchState &state, bool down) noexcept
+        {
+            state = {};
+            state.blocked = down;
+        }
+    }
+
     void GUI::syncRegisteredScreens()
     {
         if (_screen.registrySynced)
@@ -46,6 +58,141 @@ namespace pipgui
         _screen.registrySynced = true;
     }
 
+    void GUI::resetNavDispatch() noexcept
+    {
+        _nav = {};
+        _nav.next.blocked = _input.nextDown;
+        _nav.prev.blocked = _input.prevDown;
+        _nav.select.blocked = _input.hasSelect && _input.selectDown;
+        _nav.combo.blocked = _input.comboDown;
+    }
+
+    void GUI::bindNavHandler(uint8_t screenId, NavHandler handler, void *userData) noexcept
+    {
+        ensureScreenState(screenId);
+        if (screenId >= _screen.capacity || !_screen.navBindings)
+            return;
+        _screen.navBindings[screenId].handler = handler;
+        _screen.navBindings[screenId].userData = userData;
+    }
+
+    void GUI::bindListNav(uint8_t screenId) noexcept
+    {
+        bindNavHandler(screenId, &GUI::handleListNavEvent, nullptr);
+    }
+
+    void GUI::bindTileNav(uint8_t screenId) noexcept
+    {
+        bindNavHandler(screenId, &GUI::handleTileNavEvent, nullptr);
+    }
+
+    bool GUI::emitNavEvent(uint8_t screenId,
+                           const InputState &input,
+                           NavHandler handler,
+                           void *userData,
+                           NavButton button,
+                           NavEventCode code,
+                           uint32_t now,
+                           uint32_t heldMs,
+                           bool longPress)
+    {
+        if (!handler)
+            return false;
+
+        const NavEvent event = {
+            screenId,
+            button,
+            code,
+            now,
+            heldMs,
+            longPress,
+            input.nextDown,
+            input.prevDown,
+            input.selectDown,
+            input.comboDown,
+            input.hasSelect};
+        return handler(*this, event, userData);
+    }
+
+    bool GUI::dispatchNavButton(detail::NavButtonDispatchState &state,
+                                uint8_t screenId,
+                                const InputState &input,
+                                NavButton button,
+                                bool down,
+                                NavHandler handler,
+                                void *userData,
+                                uint32_t now)
+    {
+        bool handled = false;
+
+        if (state.blocked)
+        {
+            if (!down)
+                state = {};
+            return false;
+        }
+
+        if (down)
+        {
+            if (!state.down)
+            {
+                state.down = true;
+                state.longFired = false;
+                state.pressedMs = now;
+                state.repeatMs = now;
+                handled = emitNavEvent(screenId, input, handler, userData, button, NavEventCode::Pressed, now, 0, false) || handled;
+            }
+            else
+            {
+                const uint32_t heldMs = now - state.pressedMs;
+                if (!state.longFired && heldMs >= kNavLongPressMs)
+                {
+                    state.longFired = true;
+                    state.repeatMs = now;
+                    handled = emitNavEvent(screenId, input, handler, userData, button, NavEventCode::LongPressed, now, heldMs, true) || handled;
+                }
+                else if (state.longFired && (now - state.repeatMs) >= kNavRepeatMs)
+                {
+                    state.repeatMs = now;
+                    handled = emitNavEvent(screenId, input, handler, userData, button, NavEventCode::Repeat, now, heldMs, true) || handled;
+                }
+            }
+        }
+        else if (state.down)
+        {
+            const uint32_t heldMs = now - state.pressedMs;
+            handled = emitNavEvent(screenId, input, handler, userData, button, NavEventCode::Released, now, heldMs, state.longFired) || handled;
+            state = {};
+        }
+
+        return handled;
+    }
+
+    bool GUI::dispatchNavInput(uint8_t screenId, const InputState &input)
+    {
+        if (screenId >= _screen.capacity || !_screen.navBindings)
+            return false;
+
+        const detail::NavBindingState &binding = _screen.navBindings[screenId];
+        if (!binding.handler)
+            return false;
+
+        const uint32_t now = nowMs();
+        const bool comboActive = input.comboDown;
+        bool handled = false;
+        if (comboActive)
+        {
+            blockNavButton(_nav.next, input.nextDown);
+            blockNavButton(_nav.prev, input.prevDown);
+        }
+
+        handled = dispatchNavButton(_nav.combo, screenId, input, NavButton::Combo, comboActive, binding.handler, binding.userData, now) || handled;
+        handled = dispatchNavButton(_nav.next, screenId, input, NavButton::Next, comboActive ? false : input.nextDown, binding.handler, binding.userData, now) || handled;
+        handled = dispatchNavButton(_nav.prev, screenId, input, NavButton::Prev, comboActive ? false : input.prevDown, binding.handler, binding.userData, now) || handled;
+        handled = dispatchNavButton(_nav.select, screenId, input, NavButton::Select, input.hasSelect && input.selectDown, binding.handler, binding.userData, now) || handled;
+        return handled;
+    }
+
     void GUI::setScreenId(uint8_t id)
     {
         if (_screen.current != id)
@@ -56,6 +203,7 @@ namespace pipgui
         }
 
         _flags.screenTransition = 0;
+        resetNavDispatch();
 
         if (id == INVALID_SCREEN_ID)
         {
@@ -72,31 +220,6 @@ namespace pipgui
             _screen.current = id;
         else
             _screen.current = INVALID_SCREEN_ID;
-
-        if (_screen.current != INVALID_SCREEN_ID)
-        {
-            const InputState &in = _input;
-            if (ListState *list = getList(_screen.current))
-            {
-                list->nextHoldStartMs = 0;
-                list->prevHoldStartMs = 0;
-                list->nextLongFired = false;
-                list->prevLongFired = false;
-                list->lastNextDown = in.nextDown;
-                list->lastPrevDown = in.prevDown;
-                list->lastSelectDown = in.hasSelect ? in.selectDown : false;
-            }
-            if (TileState *tile = getTile(_screen.current))
-            {
-                tile->nextHoldStartMs = 0;
-                tile->prevHoldStartMs = 0;
-                tile->nextLongFired = false;
-                tile->prevLongFired = false;
-                tile->lastNextDown = in.nextDown;
-                tile->lastPrevDown = in.prevDown;
-                tile->lastSelectDown = in.hasSelect ? in.selectDown : false;
-            }
-        }
 
         _flags.dirtyRedrawPending = 0;
         _flags.needRedraw = 1;
@@ -167,6 +290,7 @@ namespace pipgui
         {
             if (_screen.current != id)
                 freeBlurBuffers(platform());
+            resetNavDispatch();
             _screen.to = id;
             _screen.transDir = transDir;
             _screen.animStartMs = nowMs();
@@ -237,12 +361,16 @@ namespace pipgui
         if (logicalRotationActive())
         {
             const auto *buf = static_cast<const uint16_t *>(_render.sprite.getBuffer());
-            return presentOrthogonalRotatedSprite(buf,
-                                                  _render.sprite.width(),
-                                                  (int16_t)_render.screenWidth,
-                                                  (int16_t)_render.screenHeight,
-                                                  logicalRotationDelta(),
-                                                  stage);
+            return presentOrthogonalRotatedSpriteRegion(buf,
+                                                        _render.sprite.width(),
+                                                        (int16_t)_render.screenWidth,
+                                                        (int16_t)_render.screenHeight,
+                                                        logicalRotationDelta(),
+                                                        srcX,
+                                                        srcY,
+                                                        w,
+                                                        h,
+                                                        stage);
         }
 
         const auto *buf = static_cast<const uint16_t *>(_render.sprite.getBuffer());

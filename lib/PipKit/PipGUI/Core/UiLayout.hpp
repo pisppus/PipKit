@@ -11,12 +11,24 @@ namespace pipgui
         int16_t h;
     };
 
+    struct UiPoint
+    {
+        int16_t x;
+        int16_t y;
+    };
+
     struct UiRect
     {
         int16_t x;
         int16_t y;
         int16_t w;
         int16_t h;
+    };
+
+    struct UiGap
+    {
+        int16_t x;
+        int16_t y;
     };
 
     struct UiInsets
@@ -152,6 +164,15 @@ namespace pipgui
             return placeInside(area, size, UiJustify::Center, UiAlign::Center);
         }
 
+        static inline UiRect translate(const UiRect &rc, int16_t dx, int16_t dy) noexcept
+        {
+            return UiRect{
+                (int16_t)(rc.x + dx),
+                (int16_t)(rc.y + dy),
+                rc.w,
+                rc.h};
+        }
+
         static inline UiRect inset(const UiRect &rc, int16_t l, int16_t t, int16_t r, int16_t b) noexcept
         {
             const int16_t w = rc.w - l - r;
@@ -284,6 +305,64 @@ namespace pipgui
         }
     };
 
+    struct UiBox
+    {
+        UiRect rect;
+
+        explicit UiBox(const UiRect &rc) noexcept
+            : rect(rc)
+        {
+        }
+
+        UiBox &inset(int16_t all) noexcept
+        {
+            rect = UiLayout::inset(rect, all);
+            return *this;
+        }
+
+        UiBox &inset(int16_t l, int16_t t, int16_t r, int16_t b) noexcept
+        {
+            rect = UiLayout::inset(rect, l, t, r, b);
+            return *this;
+        }
+
+        UiBox &inset(const UiInsets &in) noexcept
+        {
+            rect = UiLayout::inset(rect, in);
+            return *this;
+        }
+
+        [[nodiscard]] UiRect top(int16_t h, int16_t gap = 0) noexcept
+        {
+            return UiLayout::takeTop(rect, h, gap);
+        }
+
+        [[nodiscard]] UiRect bottom(int16_t h, int16_t gap = 0) noexcept
+        {
+            return UiLayout::takeBottom(rect, h, gap);
+        }
+
+        [[nodiscard]] UiRect left(int16_t w, int16_t gap = 0) noexcept
+        {
+            return UiLayout::takeLeft(rect, w, gap);
+        }
+
+        [[nodiscard]] UiRect right(int16_t w, int16_t gap = 0) noexcept
+        {
+            return UiLayout::takeRight(rect, w, gap);
+        }
+
+        [[nodiscard]] UiRect rest() const noexcept
+        {
+            return rect;
+        }
+
+        [[nodiscard]] operator UiRect() const noexcept
+        {
+            return rect;
+        }
+    };
+
     [[nodiscard]] inline UiRect inset(const UiRect &rc, int16_t all) noexcept
     {
         return UiLayout::inset(rc, all);
@@ -324,6 +403,11 @@ namespace pipgui
     [[nodiscard]] inline UiRect centerIn(const UiRect &area, const UiSize &size) noexcept
     {
         return UiLayout::centerIn(area, size);
+    }
+
+    [[nodiscard]] inline UiRect translate(const UiRect &rc, int16_t dx, int16_t dy) noexcept
+    {
+        return UiLayout::translate(rc, dx, dy);
     }
 
     [[nodiscard]] inline UiRect inset(const UiRect &rc, int16_t l, int16_t t, int16_t r, int16_t b) noexcept
