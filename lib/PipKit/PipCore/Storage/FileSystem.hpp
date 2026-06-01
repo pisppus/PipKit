@@ -3,7 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#if defined(_WIN32)
+#include <PipCore/Config/Features.hpp>
+
+#if PIPCORE_TARGET_DESKTOP
 
 namespace pipcore::storage
 {

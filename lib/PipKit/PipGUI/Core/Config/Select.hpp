@@ -1,6 +1,8 @@
 #pragma once
 
-#if defined(_WIN32) && __has_include(<config_sim.hpp>)
+#include <PipCore/Config/Features.hpp>
+
+#if PIPCORE_TARGET_DESKTOP && __has_include(<config_sim.hpp>)
 #include <config_sim.hpp>
 #elif __has_include(<config.hpp>)
 #include <config.hpp>

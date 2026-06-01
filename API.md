@@ -1,4 +1,4 @@
-﻿# PipKit API
+# PipKit API
 
 Этот файл описывает актуальный публичный API `PipGUI` и `PipCore`, который есть в коде проекта.
 
@@ -70,34 +70,50 @@ build_flags =
 
 # 2. Desktop simulator
 
-Симулятор нужен для локального прогона GUI на Windows без ESP32 и физического дисплея.
-Он собирает проект в desktop-конфигурации и подменяет platform/display layer на `DESKTOP + SIMULATOR`.
+Симулятор нужен для локального прогона GUI на Windows/Linux.
+Он собирает проект в desktop-конфигурации и подменяет platform/display слой на `DESKTOP + SIMULATOR`.
 
-Запуск:
+Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1
+powershell -ExecutionPolicy Bypass -File .\Tools\Simulator\Windows\Sim.ps1
+```
+
+Linux:
+
+```bash
+./Tools/Simulator/Linux/Sim.sh
 ```
 
 Полезные варианты:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -Debug
-powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -NoRun
+powershell -ExecutionPolicy Bypass -File .\Tools\Simulator\Windows\Sim.ps1 -Debug
+powershell -ExecutionPolicy Bypass -File .\Tools\Simulator\Windows\Sim.ps1 -NoRun
+powershell -ExecutionPolicy Bypass -File .\Tools\Simulator\Windows\Sim.ps1 -InstallDeps
 ```
 
-Что делает script:
+```bash
+./Tools/Simulator/Linux/Sim.sh --debug
+./Tools/Simulator/Linux/Sim.sh --no-run
+./Tools/Simulator/Linux/Sim.sh --install-deps
+```
 
-- собирает native desktop-версию в `.sim/`
-- по умолчанию сразу запускает `pipgui-sim.exe`
-- при `-Debug` собирает debug-вариант `pipgui-sim-debug.exe`
-- при `-NoRun` только собирает exe без запуска
-- если симулятор уже запущен, script сначала останавливает прошлый процесс и потом пересобирает новый
+Что делает:
+
+- при `Debug` собирает debug-вариант
+- при `NoRun` / `--no-run` только собирает исполняемый файл без запуска
+- если wxWidgets ещё не установлен в `.sim/deps`, Windows скрипт сам вызывает `Tools/Simulator/Windows/Sim-Deps.ps1`
+
+`/Sim-Deps.ps1` и `/Sim-Deps.sh` это отдельная подготовка simulator-зависимостей:
+
+- Windows: ставит/обновляет локальный `vcpkg` в `.sim/deps/vcpkg`, ставит `wxwidgets:x64-windows-release`
+- Linux: ставит системные пакеты через доступный менеджер пакетов (`apt`, `dnf`, `pacman`, `zypper`), включая CMake/Ninja/wxWidgets/ffmpeg
 
 Что важно по окружению:
 
-- сейчас simulator-tooling рассчитан на Windows
-- нужен установленный Visual Studio C++ toolchain (`Desktop development with C++`)
+- Windows использует Visual Studio C++ toolchain и wxWidgets из локального vcpkg
+- Linux использует системный C++ toolchain, CMake/Ninja и системный wxWidgets
 - для simulator build `PipCore` сначала пытается подключить `config_sim.hpp`, а если его нет, использует обычный `config.hpp`
 - host-обвязка simulator-а живёт внутри `PipCore/Host/Desktop/`
 
@@ -106,20 +122,24 @@ powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -NoRun
 - `PIPGUI_SIM_SCALE`
   - масштаб окна simulator относительно логического framebuffer
   - по умолчанию `1`
+- `PIPGUI_SIM_PROJECT_NAME`
+  - опциональное название проекта для заголовка окна
+  - пример: `#define PIPGUI_SIM_PROJECT_NAME "Roma"`
+  - если не задано, заголовок будет просто `Simulator`
 - `PIPGUI_SIM_DEFAULT_WIDTH`
-  - fallback-ширина simulator display, если проект не вызвал `configDisplay().size(...)`
-  - по умолчанию `320`
+  - fallback-ширина экрана симулятора, если проект не вызвал `configDisplay().size(...)`
+  - по умолчанию `480`
 - `PIPGUI_SIM_DEFAULT_HEIGHT`
-  - fallback-высота simulator display, если проект не вызвал `configDisplay().size(...)`
-  - по умолчанию `240`
+  - fallback-высота экрана симулятора, если проект не вызвал `configDisplay().size(...)`
+  - по умолчанию `320`
 - `PIPGUI_SIM_BTN_PREV_PIN`
-  - какой virtual pin считать кнопкой `Prev`
+  - какой виртуальный пин считать кнопкой `Prev`
   - по умолчанию `4`
 - `PIPGUI_SIM_BTN_NEXT_PIN`
-  - какой virtual pin считать кнопкой `Next`
+  - какой виртуальный пин считать кнопкой `Next`
   - по умолчанию `20`
 - `PIPGUI_SIM_BTN_SELECT_PIN`
-  - какой virtual pin считать кнопкой `Select`
+  - какой виртуальный пин считать кнопкой `Select`
   - по умолчанию `21`
 
 Пример:
@@ -129,6 +149,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -NoRun
 #define PIPCORE_DISPLAY SIMULATOR
 
 #define PIPGUI_SIM_SCALE 2
+#define PIPGUI_SIM_PROJECT_NAME "Roma"
 #define PIPGUI_SIM_DEFAULT_WIDTH 320
 #define PIPGUI_SIM_DEFAULT_HEIGHT 240
 #define PIPGUI_SIM_BTN_PREV_PIN 16
@@ -141,27 +162,36 @@ powershell -ExecutionPolicy Bypass -File .\tools\sim.ps1 -NoRun
 - `Left` или `A` - кнопка `Prev`
 - `Right` или `D` - кнопка `Next`
 - `Enter` или `Space` - кнопка `Select`
-- `F1` - перезапуск simulator-процесса
-- `F2` - сохранить PNG-скриншот в `.sim/shots/`
-- `F3` - начать/остановить запись видео в `.sim/videos/`
 - клавиши `0..3` отправляются в serial input simulator-а как обычные символы
+
+В правой панели доступны настройки:
+
+- пауза/возобновление
+- шаг кадра вперёд и назад, с настраиваемым количеством кадров за один шаг
+- `Time scale` slider для замедления/ускорения simulator-clock
+- `SPI bottleneck` с частотами от 27 до 80 MHz;
+- RGB565 preview для просмотра как на 16-bit дисплее
+- Создание скриншотов в `.sim/shots/` (`PNG`, если доступен, `BMP`, если обработчик изображений недоступен)
+- Запись MP4 видео в `.sim/videos/` через `ffmpeg`
+- перезапуск симулятора
+- встроенная консоль для логирования снизу окна
+
+Под экраном рендера simulator показывает компактные метрики:
+
+- `Redrawn` - процент и количество пикселей, перерисованных за последний показанный кадр
+- `Heap / Peak` — приблизительный трекер SRAM для оценки дефицита памяти на стороне устройства
+- `Render CPU` - время подготовки последнего кадра на стороне процессора
+- `SPI estimate` - расчётное время передачи изменённых пикселей на текущей SPI частоте
 
 Ограничения и отличия от железа:
 
-- это desktop runtime, а не cycle-accurate эмулятор ESP32
-- timing, ввод и системные backend-ы могут отличаться от реального устройства
-- screenshot/video hotkeys simulator-а работают отдельно от встроенной screenshot-системы `PipGUI`
+- Это десктопная среда выполнения, а не потактный эмулятор ESP32
+- SPI throttling моделирует пропускную способность передачи данных на дисплей, но не эмулирует периферию DMA/SPI потактово
+- Тайминги, ввод и системные бэкенды могут отличаться от реального устройства
+- Скриншот/видео hotkeys simulator-а работают отдельно от встроенной скриншот-системы `PipGUI`
 - в simulator config по умолчанию выключены `PIPGUI_WIFI`, `PIPGUI_OTA` и built-in screenshots, даже если core-level backend оставлен включённым для совместимости сборки
 
-## 2.3. Структура host-layer
-
-Desktop simulator сейчас состоит из трёх частей:
-
-- `PipCore/Platforms/Desktop` - desktop platform/runtime backend
-- `PipCore/Displays/Simulator` - display driver, который рисует framebuffer в desktop runtime
-- `PipCore/Host/Desktop` - host-обвязка для запуска Arduino-style app на ПК
-
-## 2.4. Что нужно проекту для симуляции
+## 2.3. Что нужно проекту для симуляции
 
 Если проект пишет графику через `PipCore` / `PipGUI`, для simulator обычно достаточно следующего:
 
@@ -789,13 +819,13 @@ ui.updateAnimIcon()
 
 Чтобы добавить свою иконку:
 
-1. положить source-файл в `tools/icons/sources/`
+1. положить source-файл в `Tools/Icons/Sources/`
 2. пересобрать проект — генератор сам обновит готовые файлы в `lib/PipKit/PipGUI/Graphics/Text/Icons/`
 3. использовать иконку по имени файла
 
 Пример:
 
-- файл `tools/icons/sources/checkmark.svg`
+- файл `Tools/Icons/Sources/checkmark.svg`
 - в коде: `.icon(checkmark)`
 
 Что важно:
@@ -2024,7 +2054,7 @@ ui.setErrorButtonsDown(btnNext.isDown(), btnPrev.isDown(), btnCombo.isDown());  
 Скрипт на ПК:
 
 ```bash
-python tools/screenshots/bin/capture.py
+python Tools/Screenshots/Bin/Capture.py
 ```
 
 - при запуске без параметров tool покажет меню: port, baud и output directory
@@ -2032,7 +2062,7 @@ python tools/screenshots/bin/capture.py
 Быстрый прямой запуск тоже можно:
 
 ```bash
-python tools/screenshots/bin/capture.py --port COM9 --baud 1000000
+python Tools/Screenshots/Bin/Capture.py --port COM9 --baud 1000000
 ```
 
 ## 17.3. Flash (LittleFS)
@@ -2117,12 +2147,12 @@ ui.wifiLocalIpV4();     // IPv4 как packed uint32_t
 
 > Для OTA нужна A/B partition table с двумя OTA app-слотами.
 
-## 19.1. Тулинг (`tools/ota/`)
+## 19.1. Тулинг (`Tools/Ota/`)
 
 Сгенерировать ключ:
 
 ```bash
-python tools/ota/key.py
+python Tools/Ota/Key.py
 ```
 
 Если запустить без параметров, tool покажет меню и даст выбрать путь сохранения числом.
@@ -2130,19 +2160,19 @@ python tools/ota/key.py
 Сделать stable release:
 
 ```bash
-python tools/ota/release.py
+python Tools/Ota/Release.py
 ```
 
 Сделать beta release:
 
 ```bash
-python tools/ota/release.py --beta --interactive
+python Tools/Ota/Release.py --beta --interactive
 ```
 
 Проверка manifest + bin:
 
 ```bash
-python tools/ota/verify.py
+python Tools/Ota/Verify.py
 ```
 
 При запуске без параметров tool покажет меню: manifest, firmware source и signature check.

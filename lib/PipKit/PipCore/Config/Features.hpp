@@ -6,7 +6,7 @@
 #define PIPCORE_TARGET_ESP32 0
 #endif
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__linux__)
 #define PIPCORE_TARGET_DESKTOP 1
 #else
 #define PIPCORE_TARGET_DESKTOP 0
