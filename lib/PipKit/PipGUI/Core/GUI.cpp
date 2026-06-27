@@ -940,23 +940,40 @@ namespace pipgui
                 (void)releaseGraphCachesForRecovery(plat);
             }
 
-            const int16_t targetH = tiled ? ((sh > 1) ? (int16_t)((sh + 1) / 2) : sh) : sh;
-            const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
+            int16_t targetH = tiled ? ((sh > 1) ? (int16_t)((sh + 1) / 2) : sh) : sh;
             _render.sprite.deleteSprite();
-            const bool ok = _render.sprite.createSprite(sw, targetH);
+            bool ok = _render.sprite.createSprite(sw, targetH);
+
+            if (!ok && tiled)
+            {
+                targetH = (sh > 1) ? (int16_t)((sh + 3) / 4) : sh;
+                ok = _render.sprite.createSprite(sw, targetH);
+            }
+
             if (ok)
             {
                 _flags.tiledMode = tiled ? 1U : 0U;
                 _flags.autoTiledMode = (tiled && autoTiled) ? 1U : 0U;
                 return true;
             }
+
+            const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
             if (plat && bytes > 0 &&
-                detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default) &&
-                _render.sprite.createSprite(sw, targetH))
+                detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default))
             {
-                _flags.tiledMode = tiled ? 1U : 0U;
-                _flags.autoTiledMode = (tiled && autoTiled) ? 1U : 0U;
-                return true;
+                targetH = tiled ? ((sh > 1) ? (int16_t)((sh + 1) / 2) : sh) : sh;
+                ok = _render.sprite.createSprite(sw, targetH);
+                if (!ok && tiled)
+                {
+                    targetH = (sh > 1) ? (int16_t)((sh + 3) / 4) : sh;
+                    ok = _render.sprite.createSprite(sw, targetH);
+                }
+                if (ok)
+                {
+                    _flags.tiledMode = tiled ? 1U : 0U;
+                    _flags.autoTiledMode = (tiled && autoTiled) ? 1U : 0U;
+                    return true;
+                }
             }
             return false;
         };
@@ -1314,10 +1331,17 @@ namespace pipgui
                                      : _render.screenHeight;
         const int16_t sw = static_cast<int16_t>(canvasW);
         const int16_t sh = static_cast<int16_t>(canvasH);
-        const int16_t tileH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
 
+        int16_t tileH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
         _render.sprite.deleteSprite();
-        const bool ok = _render.sprite.createSprite(sw, tileH);
+        bool ok = _render.sprite.createSprite(sw, tileH);
+
+        if (!ok)
+        {
+            tileH = (sh > 1) ? static_cast<int16_t>((sh + 3) / 4) : sh;
+            ok = _render.sprite.createSprite(sw, tileH);
+        }
+
         _flags.spriteEnabled = ok ? 1U : 0U;
         _flags.tiledMode = ok ? 1U : 0U;
         _flags.autoTiledMode = ok ? 1U : 0U;
@@ -1356,7 +1380,8 @@ namespace pipgui
         const uint16_t fullH = (delta & 1U) ? _render.physicalWidth : _render.physicalHeight;
         const int16_t fullWi = static_cast<int16_t>(fullW);
         const int16_t fullHi = static_cast<int16_t>(fullH);
-        const int16_t tileH = (fullH > 1) ? static_cast<int16_t>((fullH + 1U) / 2U) : static_cast<int16_t>(fullH);
+
+        const int16_t prevTileH = _render.sprite.height();
         const int16_t tileW = static_cast<int16_t>(fullW);
 
         _render.sprite.deleteSprite();
@@ -1374,7 +1399,7 @@ namespace pipgui
             return true;
         }
 
-        const bool restored = _render.sprite.createSprite(tileW, tileH);
+        const bool restored = _render.sprite.createSprite(tileW, prevTileH);
         _flags.spriteEnabled = restored ? 1U : 0U;
         _flags.tiledMode = restored ? 1U : 0U;
         _flags.autoTiledMode = restored ? 1U : 0U;
@@ -1960,30 +1985,42 @@ namespace pipgui
 
             const int16_t sw = static_cast<int16_t>(screenW);
             const int16_t sh = static_cast<int16_t>(screenH);
-            const int16_t targetH = tiled ? ((sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh) : sh;
-            const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
-            bool ok = false;
+
             if (!tiled)
-                ok = _render.sprite.createSprite(sw, sh);
-            else
             {
+                const bool ok = _render.sprite.createSprite(sw, sh);
+                _flags.spriteEnabled = ok ? 1U : 0U;
+                _render.activeSprite = ok ? &_render.sprite : nullptr;
+                return ok;
+            }
+
+            int16_t targetH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
+            bool ok = _render.sprite.createSprite(sw, targetH);
+
+            if (!ok)
+            {
+                targetH = (sh > 1) ? static_cast<int16_t>((sh + 3) / 4) : sh;
                 ok = _render.sprite.createSprite(sw, targetH);
             }
 
             if (!ok)
             {
                 pipcore::Platform *plat = platform();
+                const size_t bytes = static_cast<size_t>(sw) * static_cast<size_t>(targetH) * sizeof(uint16_t);
                 if (plat && bytes > 0 && detail::recoverFromAllocFailure(plat, bytes, pipcore::AllocCaps::Default))
                 {
-                    if (!tiled)
-                        ok = _render.sprite.createSprite(sw, sh);
-                    else
+                    targetH = (sh > 1) ? static_cast<int16_t>((sh + 1) / 2) : sh;
+                    ok = _render.sprite.createSprite(sw, targetH);
+                    if (!ok)
+                    {
+                        targetH = (sh > 1) ? static_cast<int16_t>((sh + 3) / 4) : sh;
                         ok = _render.sprite.createSprite(sw, targetH);
+                    }
                 }
             }
 
-            _flags.tiledMode = (ok && tiled) ? 1U : 0U;
-            _flags.autoTiledMode = (ok && tiled && autoTiled) ? 1U : 0U;
+            _flags.tiledMode = ok ? 1U : 0U;
+            _flags.autoTiledMode = (ok && autoTiled) ? 1U : 0U;
 
             _flags.spriteEnabled = ok ? 1U : 0U;
             _render.activeSprite = _flags.spriteEnabled ? &_render.sprite : nullptr;
@@ -2002,28 +2039,26 @@ namespace pipgui
             return false;
         };
 
+        if (rotation == _disp.rotation)
+            return true;
+
         _disp.rotation = rotation & 3U;
-        const bool quarterTurn = (((_disp.rotation - _disp.physicalRotation) & 1U) != 0U);
+        const bool quarterTurn = ((_disp.rotation & 1U) != 0U);
         const uint16_t targetW = quarterTurn ? _render.physicalHeight : _render.physicalWidth;
         const uint16_t targetH = quarterTurn ? _render.physicalWidth : _render.physicalHeight;
 
-        if (!recreateCanvas(targetW, targetH, wasTiled))
+        if (recreateCanvas(targetW, targetH, wasTiled))
         {
-            _disp.rotation = prevRotation;
-            _render.screenWidth = prevScreenW;
-            _render.screenHeight = prevScreenH;
+            _render.screenWidth = targetW;
+            _render.screenHeight = targetH;
             Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-            (void)recreateCanvas(prevScreenW, prevScreenH, wasTiled);
-            _flags.autoTiledMode = wasAutoTiled ? 1U : 0U;
-            return false;
+            _flags.needRedraw = 1;
+            return true;
         }
 
-        _render.screenWidth = targetW;
-        _render.screenHeight = targetH;
-        Debug::setCanvasSize((int16_t)_render.screenWidth, (int16_t)_render.screenHeight);
-        _clip = {};
-        _dirty.count = 0;
-        return true;
+        _disp.rotation = prevRotation;
+        (void)recreateCanvas(prevScreenW, prevScreenH, wasTiled);
+        return false;
     }
 
     void GUI::setRotation(uint8_t rotation, uint32_t durationMs)

@@ -123,7 +123,8 @@ namespace pipgui
             cfg.width = 0;
             cfg.height = 0;
             cfg.hz = 0;
-#if PIPCORE_DISPLAY_ID(PIPCORE_DISPLAY) == PIPCORE_DISPLAY_TAG_ILI9488
+#if (PIPCORE_DISPLAY_ID(PIPCORE_DISPLAY) == PIPCORE_DISPLAY_TAG_ILI9488) || \
+    (PIPCORE_DISPLAY_ID(PIPCORE_DISPLAY) == PIPCORE_DISPLAY_TAG_ST7796)
             cfg.order = 1;
 #else
             cfg.order = 0;

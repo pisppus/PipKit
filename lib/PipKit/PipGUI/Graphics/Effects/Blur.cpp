@@ -579,19 +579,15 @@ namespace pipgui
         const bool gradV = gradient && (dir == TopDown || dir == BottomUp);
         const int32_t sampleBaseX = drawX - sampleGlobalX;
 
-        // Делаем копию оригинального резкого кадра из smallBase в smallBlur для размытия
         std::memcpy(smallBlur, smallBase, (size_t)smallLen * sizeof(uint16_t));
 
         if (radiusSmall > 0)
         {
-            // Выполняем полноценный 2D-блюр на буфере smallBlur
             stackBlurPassHorizontal(smallBlur, smallBlur, sw, sh, radiusSmall, stack);
             stackBlurPassVertical(smallBlur, smallBlur, sw, sh, radiusSmall, stack);
         }
 
-        // smallFinal указывает на полностью размытый 2D-кадр
         uint16_t *smallFinal = smallBlur;
-        // smallAxis указывает на оригинальный, абсолютно резкий unblurred-кадр (избегаем 1D-искажений)
         uint16_t *smallAxis = smallBase;
 
         if (gradH)
@@ -601,7 +597,6 @@ namespace pipgui
 
         if (!gradient && !useMaterial)
         {
-            // FAST PATH (размытие без градиента/материала)
             for (int16_t iy = 0; iy < h; ++iy)
             {
                 const int32_t screenOff = (int32_t)(targetY + iy) * targetStride + targetX;
@@ -623,7 +618,6 @@ namespace pipgui
         }
         else
         {
-            // SLOW PATH (градиенты и/или наложение материала)
             for (int16_t iy = 0; iy < h; ++iy)
             {
                 const int32_t screenOff = (int32_t)(targetY + iy) * targetStride + targetX;

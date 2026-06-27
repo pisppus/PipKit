@@ -13,11 +13,11 @@ namespace
 {
 
 #ifndef PIPGUI_DEMO_BTN_NEXT_PIN
-#define PIPGUI_DEMO_BTN_NEXT_PIN 9
+#define PIPGUI_DEMO_BTN_NEXT_PIN 40
 #endif
 
 #ifndef PIPGUI_DEMO_BTN_PREV_PIN
-#define PIPGUI_DEMO_BTN_PREV_PIN 16
+#define PIPGUI_DEMO_BTN_PREV_PIN 18
 #endif
 
 #ifndef PIPGUI_DEMO_BTN_SELECT_PIN
@@ -657,9 +657,9 @@ void demoSetup()
 
         ui.configDisplay()
             .pins({6, 5, 7, 8, -1})
-            .size(240, 320);
+            .size(320, 480);
 
-        ui.begin(3, gState.forceTiles);
+        ui.begin(1, gState.forceTiles);
         configureStatusBar();
         updateStatusBarText(0);
         ui.setStatusBarBattery(gState.batteryLevel, Bar);

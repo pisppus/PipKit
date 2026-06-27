@@ -1,7 +1,7 @@
 icons_static_layer_v3
 da3a04f51cd678649927301f86bcaffc52de31b6e69ff53f3ef8160c2e0a4122
-{"mtime_ns": 1764505527689675600, "path": "c:\\users\\pisppus\\documents\\platformio\\projects\\pipkit\\tools\\icons\\bin\\msdfgen.exe", "size": 1803776}
-398b7930b84d5e72c2765e3ee40ffb3e27f9d6c1a2a0b73b1ffe8189d18d1756
-76f0a4b8fa9f8795de3455098368a43ea2d30f87eb4a864caee215d0394a8110
+{"mtime_ns": 1782573055819234300, "path": "c:\\users\\pisppus\\documents\\platformio\\projects\\pipkit2\\tools\\icons\\bin\\msdfgen.exe", "size": 1803776}
+ee3129d1f792a8695191f5dbf807e88f6722319731dc7f751de71ab8d9374490
+ef378bd2c051b2f017456775fcf69e63083ff171291234c0c3372f689e3267e1
 
 {"base": "arrow", "icon_px": 48, "layer": "layer0", "pxrange": 8, "stroke": false, "stroke_steps": "", "transform": ["2.0", "0.0", "0.0"]}
